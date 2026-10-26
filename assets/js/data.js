@@ -23,7 +23,7 @@ window.GAMES = [
       en: "Custom Ragnarok Online servers with hand-built systems and events. Pick a server below and jump in.",
       id: "Server Ragnarok Online custom dengan sistem dan event bikinan sendiri. Pilih server di bawah, langsung main."
     },
-    emblem: "assets/images/emblem-ragnarok.svg",
+    emblem: "assets/images/emblem-ragnarok.png",
     url: "#portfolio",
     cta: { en: "See servers", id: "Lihat server" }
   },
