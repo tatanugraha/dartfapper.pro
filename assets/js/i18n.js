@@ -3,6 +3,8 @@ window.I18N = {
   en: {
     "nav.home": "Home", "nav.games": "Games", "nav.portfolio": "Servers", "nav.service": "Services", "nav.news": "News",
     "cta.discord": "Join Discord",
+    "cta.login": "Log in", "cta.logout": "Log out",
+    "account.confirmLogout": "Log out of your dartfapper account?",
     "hero.kicker": "Indie games & RO servers",
     "hero.title": "Card duels, grinding,<br>all in one place",
     "hero.text": "Every game and Ragnarok server I've built, in one spot. Pick one and jump straight in.",
@@ -42,6 +44,8 @@ window.I18N = {
   id: {
     "nav.home": "Home", "nav.games": "Game", "nav.portfolio": "Server", "nav.service": "Jasa", "nav.news": "Update",
     "cta.discord": "Gabung Discord",
+    "cta.login": "Masuk", "cta.logout": "Keluar",
+    "account.confirmLogout": "Keluar dari akun dartfapper?",
     "hero.kicker": "Game indie & server RO",
     "hero.title": "Duel kartu, grinding,<br>semua di satu tempat",
     "hero.text": "Semua game dan server Ragnarok yang gue bikin ngumpul di sini. Pilih satu, langsung main.",

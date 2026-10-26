@@ -5,7 +5,8 @@
 // =====================================================================
 
 window.DISCORD_URL = "https://discord.gg/cM69F5Gr2E"; // "" hides the buttons
-window.GIG_URL = "https://www.fiverr.com/tatanugraha/your-own-online-ragnarok-server";
+window.API_URL = "https://dartfapper-api.tatagpriyanugraha.workers.dev"; // "" hides login
+window.GIG_URL ="https://www.fiverr.com/tatanugraha/your-own-online-ragnarok-server";
 
 // ---------------------------------------------------------------------
 //  GAMES

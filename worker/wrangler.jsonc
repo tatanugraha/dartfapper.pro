@@ -1,0 +1,28 @@
+{
+  "name": "dartfapper-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-26",
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+  "vars": {
+    // where the login flow sends the player back to
+    "SITE_URL": "https://dartfapper.pro",
+    // origins allowed to call /api/* from the browser (comma separated)
+    "ALLOWED_ORIGINS": "https://dartfapper.pro,http://localhost:5500,http://127.0.0.1:5500",
+    // public, not a secret; DISCORD_CLIENT_SECRET is set with `wrangler secret put`
+    "DISCORD_CLIENT_ID": "1376624589630738492"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dartfapper-auth",
+      "database_id": "924b79bc-86bb-485d-968b-0f143ec40667"
+    }
+  ],
+  "r2_buckets": [
+    // game files later (saves, avatars, patches)
+    { "binding": "BUCKET", "bucket_name": "dartfapperpro" }
+  ]
+}
