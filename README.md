@@ -9,7 +9,8 @@ Layout terinspirasi [Unigine](https://github.com/codewithsadee/unigine) (MIT).
 index.html
 assets/
   css/style.css
-  js/data.js      <- ISI WEBSITE: game, update, link Discord & Fiverr
+  js/data.js      <- ISI WEBSITE: game, server portfolio, update, link Discord & Fiverr
+  js/i18n.js      <- teks UI EN/ID (EN default)
   js/script.js
   images/         <- hero banner, emblem game, favicon (SVG)
 games/            <- (opsional) game yang di-host di sini, satu folder per game

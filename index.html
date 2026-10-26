@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>dartfapper — game buatan Tata</title>
-  <meta name="description" content="Kumpulan game buatan Tata: Mythrix, server Ragnarok, dan game lain yang lagi digarap.">
+  <title>dartfapper — games & Ragnarok servers by Tata</title>
+  <meta name="description" content="Games and Ragnarok Online private servers built by Tata Nugraha: Mythrix, Sovereign RO, OTTi RO, Shinwa RO, New Era RO, Lepak RO, and more.">
   <meta property="og:title" content="dartfapper">
-  <meta property="og:description" content="Game indie buatan sendiri. Pilih satu, langsung main.">
-  <meta property="og:image" content="assets/images/hero-banner.svg">
-  <meta name="theme-color" content="#0B0726">
+  <meta property="og:description" content="Games and Ragnarok servers built by Tata. Pick one and jump in.">
+  <meta property="og:image" content="assets/images/servers/newera.jpg">
+  <meta name="theme-color" content="#050608">
   <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,26 +22,31 @@
   <!-- HEADER -->
   <header class="header" data-header>
     <div class="container">
-      <a href="#top" class="logo" aria-label="dartfapper, ke atas">
+      <a href="#top" class="logo" aria-label="dartfapper home">
         <img src="assets/images/favicon.svg" width="36" height="36" alt="">
         <span>dart<b>fapper</b></span>
       </a>
 
-      <nav class="navbar" data-navbar aria-label="Menu utama">
+      <nav class="navbar" data-navbar aria-label="Main menu">
         <ul class="navbar-list">
-          <li><a href="#top" class="navbar-link" data-nav-link>Home</a></li>
-          <li><a href="#games" class="navbar-link" data-nav-link>Game</a></li>
-          <li><a href="#service" class="navbar-link" data-nav-link>Jasa</a></li>
-          <li><a href="#news" class="navbar-link" data-nav-link>Update</a></li>
-          <li><a href="#contact" class="navbar-link" data-nav-link>Kontak</a></li>
+          <li><a href="#top" class="navbar-link" data-nav-link data-i18n="nav.home">Home</a></li>
+          <li><a href="#games" class="navbar-link" data-nav-link data-i18n="nav.games">Games</a></li>
+          <li><a href="#portfolio" class="navbar-link" data-nav-link data-i18n="nav.portfolio">Servers</a></li>
+          <li><a href="#service" class="navbar-link" data-nav-link data-i18n="nav.service">Services</a></li>
+          <li><a href="#news" class="navbar-link" data-nav-link data-i18n="nav.news">News</a></li>
         </ul>
       </nav>
 
-      <a href="#" class="btn btn-primary header-btn" data-discord target="_blank" rel="noopener">Gabung Discord</a>
-
-      <button class="nav-toggle-btn" aria-label="Buka menu" aria-expanded="false" data-nav-toggler>
-        <span class="line"></span><span class="line"></span><span class="line"></span>
-      </button>
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" data-lang-btn="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang-btn="id" aria-pressed="false">ID</button>
+        </div>
+        <a href="#" class="btn btn-primary header-btn" data-discord target="_blank" rel="noopener" data-i18n="cta.discord">Join Discord</a>
+        <button class="nav-toggle-btn" aria-label="Open menu" aria-expanded="false" data-nav-toggler>
+          <span class="line"></span><span class="line"></span><span class="line"></span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -51,54 +56,75 @@
       <!-- HERO -->
       <section class="hero" id="top" aria-labelledby="hero-title">
         <div class="container">
-          <p class="section-subtitle">Game indie buatan sendiri</p>
-          <h1 class="h1 hero-title" id="hero-title">Duel kartu, grinding,<br>semua di satu tempat</h1>
-          <a href="#games" class="btn btn-primary">Lihat semua game</a>
+          <p class="section-subtitle" data-i18n="hero.kicker">Indie games & RO servers</p>
+          <h1 class="h1 hero-title" id="hero-title" data-i18n-html="hero.title">Card duels, grinding,<br>all in one place</h1>
+          <p class="hero-text" data-i18n="hero.text">Every game and Ragnarok server I've built, in one spot. Pick one and jump straight in.</p>
+          <div class="hero-cta">
+            <a href="#games" class="btn btn-primary" data-i18n="hero.cta1">Browse games</a>
+            <a href="#portfolio" class="btn btn-ghost" data-i18n="hero.cta2">See server portfolio</a>
+          </div>
+          <ul class="hero-stats">
+            <li><strong data-stat="servers">6</strong><span data-i18n="stats.servers">RO servers built</span></li>
+            <li><strong data-stat="clients">1</strong><span data-i18n="stats.clients">mobile client (MoRo)</span></li>
+            <li><strong>2026</strong><span data-i18n="stats.since">first launch</span></li>
+          </ul>
         </div>
         <figure class="hero-banner">
-          <img src="assets/images/hero-banner.svg" width="1200" height="520" alt="Perisai rune Ragnarok diapit kartu-kartu Mythrix">
+          <img src="assets/images/hero-banner.svg" width="1200" height="520" alt="">
         </figure>
       </section>
 
-      <!-- GAMES (gaya "upcoming matches") -->
-      <section class="section games" id="games" aria-labelledby="games-label">
+      <!-- GAMES -->
+      <section class="section games" id="games" aria-labelledby="games-title">
         <div class="container">
-          <p class="section-subtitle" id="games-label" data-reveal>Daftar game</p>
-          <h2 class="h2 section-title" data-reveal>Pilih game, <span class="span">langsung main</span></h2>
-          <p class="section-text" data-reveal>Ada yang udah jalan, ada yang masih beta. Semua dibikin dan diurus sendiri.</p>
-
+          <p class="section-subtitle" data-reveal data-i18n="games.kicker">Games</p>
+          <h2 class="h2 section-title" id="games-title" data-reveal data-i18n-html="games.title">Pick a game, <span class="span">jump right in</span></h2>
+          <p class="section-text" data-reveal data-i18n="games.text">Some are live, some are still in beta. All built and run by me.</p>
           <ul class="game-list" id="game-list"></ul>
         </div>
       </section>
 
-      <!-- JASA -->
+      <!-- PORTFOLIO -->
+      <section class="section portfolio" id="portfolio" aria-labelledby="portfolio-title">
+        <div class="container">
+          <p class="section-subtitle" data-reveal data-i18n="portfolio.kicker">Server portfolio</p>
+          <h2 class="h2 section-title" id="portfolio-title" data-reveal data-i18n-html="portfolio.title">Ragnarok servers <span class="span">I've built</span></h2>
+          <p class="section-text" data-reveal data-i18n="portfolio.text">Renewal and pre-renewal, PC and mobile. Click any card to visit the live server.</p>
+          <ul class="server-grid" id="server-grid"></ul>
+        </div>
+      </section>
+
+      <!-- SERVICE -->
       <section class="section service" id="service" aria-labelledby="service-title">
         <div class="container">
           <div class="service-card" data-reveal>
             <div class="service-copy">
-              <p class="section-subtitle">Jasa</p>
-              <h2 class="h2" id="service-title">Mau punya server Ragnarok sendiri?</h2>
-              <p class="service-text">Gue bantu dari nol sampai online: setup emulator, script custom, client, sampai web panel buat pemain lo.</p>
+              <p class="section-subtitle" data-i18n="service.kicker">Services</p>
+              <h2 class="h2" id="service-title" data-i18n="service.title">Want your own Ragnarok server?</h2>
+              <p class="service-text" data-i18n="service.text">I'll take you from zero to online: emulator setup, custom scripts, client, and a web panel for your players.</p>
               <ul class="service-points">
-                <li>Setup rAthena di VPS, siap online</li>
-                <li>NPC &amp; sistem custom (event, gacha, battle pass, dll)</li>
-                <li>Client, GRF, dan patcher</li>
-                <li>Web panel buat register &amp; donasi</li>
+                <li data-i18n="service.p1">rAthena on a VPS, ready to go live</li>
+                <li data-i18n="service.p2">Custom NPCs & systems (events, gacha, battle pass)</li>
+                <li data-i18n="service.p3">Client, GRF, and patcher</li>
+                <li data-i18n="service.p4">Web panel for sign-ups & donations</li>
+                <li data-i18n="service.p5">Android client for your server (MoRo)</li>
               </ul>
-              <a class="btn btn-primary" data-gig href="#" target="_blank" rel="noopener">Order di Fiverr</a>
+              <a class="btn btn-primary" data-gig href="#" target="_blank" rel="noopener" data-i18n="service.cta">Order on Fiverr</a>
             </div>
-            <img class="service-art" src="assets/images/emblem-ragnarok.svg" width="260" height="260" alt="" loading="lazy">
+            <div class="service-proof">
+              <strong data-stat="servers">6</strong>
+              <span data-i18n="service.proof">RO servers live, plus a mobile client</span>
+            </div>
           </div>
         </div>
       </section>
 
       <!-- NEWS -->
-      <section class="section news" id="news" aria-labelledby="news-label">
+      <section class="section news" id="news" aria-labelledby="news-title">
         <div class="container">
-          <p class="section-subtitle" id="news-label" data-reveal>Kabar terbaru</p>
-          <h2 class="h2 section-title" data-reveal>Update <span class="span">& patch notes</span></h2>
-          <p class="section-text" data-reveal>Event, patch, sama progres game yang lagi digarap.</p>
-
+          <p class="section-subtitle" data-reveal data-i18n="news.kicker">Latest</p>
+          <h2 class="h2 section-title" id="news-title" data-reveal data-i18n-html="news.title">Updates <span class="span">& patch notes</span></h2>
+          <p class="section-text" data-reveal data-i18n="news.text">Events, patches, and progress on what's in the works.</p>
           <ul class="news-list" id="news-list"></ul>
         </div>
       </section>
@@ -110,49 +136,49 @@
   <footer class="footer" id="contact">
     <div class="section footer-top">
       <div class="container">
-
         <div class="footer-brand">
           <a href="#top" class="logo">
             <img src="assets/images/favicon.svg" width="36" height="36" alt="">
             <span>dart<b>fapper</b></span>
           </a>
-          <p class="footer-text">Rumah buat game-game yang gue bikin sendiri: server Ragnarok, game kartu Mythrix, dan yang nyusul.</p>
+          <p class="footer-text" data-i18n="footer.about">Home for the games and Ragnarok servers I build: Mythrix, five RO servers, a mobile client, and whatever's next.</p>
         </div>
 
-        <ul class="footer-list">
-          <li><p class="footer-list-title">Game</p></li>
-          <li data-footer-games></li>
+        <ul class="footer-list" data-footer-servers>
+          <li><p class="footer-list-title" data-i18n="footer.servers">Servers</p></li>
         </ul>
 
         <ul class="footer-list">
-          <li><p class="footer-list-title">Navigasi</p></li>
-          <li><a href="#top" class="footer-link">Home</a></li>
-          <li><a href="#games" class="footer-link">Game</a></li>
-          <li><a href="#news" class="footer-link">Update</a></li>
+          <li><p class="footer-list-title" data-i18n="footer.nav">Navigate</p></li>
+          <li><a href="#games" class="footer-link" data-i18n="nav.games">Games</a></li>
+          <li><a href="#portfolio" class="footer-link" data-i18n="nav.portfolio">Servers</a></li>
+          <li><a href="#service" class="footer-link" data-i18n="nav.service">Services</a></li>
+          <li><a href="#news" class="footer-link" data-i18n="nav.news">News</a></li>
         </ul>
 
         <div class="footer-list">
-          <p class="footer-list-title">Komunitas</p>
-          <p class="footer-text">Kabar event, giveaway, dan tes beta duluan di Discord.</p>
-          <a href="#" class="btn btn-primary" data-discord target="_blank" rel="noopener">Gabung Discord</a>
+          <p class="footer-list-title" data-i18n="footer.community">Community</p>
+          <p class="footer-text" data-i18n="footer.communityText">Events, giveaways, and early beta access on Discord.</p>
+          <a href="#" class="btn btn-primary" data-discord target="_blank" rel="noopener" data-i18n="cta.discord">Join Discord</a>
+          <a href="#" class="footer-link" data-gig target="_blank" rel="noopener" data-i18n="service.cta">Order on Fiverr</a>
         </div>
-
       </div>
     </div>
 
     <div class="footer-bottom">
       <div class="container">
-        <p class="copyright">&copy; <span data-year></span> dartfapper. Dibikin sama Tata Nugraha.</p>
-        <p class="copyright small">Ragnarok Online adalah merek dagang Gravity Co., Ltd.; situs ini fan project dan nggak berafiliasi. Layout terinspirasi <a href="https://github.com/codewithsadee/unigine" target="_blank" rel="noopener">Unigine</a> (MIT).</p>
+        <p class="copyright">&copy; <span data-year></span> dartfapper. <span data-i18n="footer.by">Made by Tata Nugraha.</span></p>
+        <p class="copyright small" data-i18n-html="footer.legal">Ragnarok Online is a trademark of Gravity Co., Ltd. This is a fan project with no affiliation. Layout inspired by <a href="https://github.com/codewithsadee/unigine" target="_blank" rel="noopener">Unigine</a> (MIT).</p>
       </div>
     </div>
   </footer>
 
-  <a href="#top" class="back-top-btn" aria-label="Kembali ke atas" data-back-top-btn>
+  <a href="#top" class="back-top-btn" aria-label="Back to top" data-back-top-btn>
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 5l-7 7h4v7h6v-7h4z" fill="currentColor"/></svg>
   </a>
 
   <script src="assets/js/data.js"></script>
+  <script src="assets/js/i18n.js"></script>
   <script src="assets/js/script.js"></script>
 </body>
 </html>
