@@ -4,7 +4,7 @@
 //  { en: "...", id: "..." }. Plain strings show the same in both languages.
 // =====================================================================
 
-window.DISCORD_URL = ""; // TODO: Discord invite link ("" hides the buttons)
+window.DISCORD_URL = "https://discord.gg/cM69F5Gr2E"; // "" hides the buttons
 window.GIG_URL = "https://www.fiverr.com/tatanugraha/your-own-online-ragnarok-server";
 
 // ---------------------------------------------------------------------
