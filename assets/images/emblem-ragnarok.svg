@@ -9,13 +9,13 @@
     <g transform="rotate(40)"><rect x="-4" y="-70" width="8" height="132" rx="2" fill="#5A3A1E"/><path d="M4 -70 Q44 -74 52 -42 Q34 -50 4 -38 Z" fill="url(#s)"/></g>
     <circle r="56" fill="url(#g)"/>
     <circle r="50" fill="url(#w)"/>
-    <circle r="38" fill="none" stroke="#B784FF" stroke-width="8" opacity=".35"/>
+    <circle r="38" fill="none" stroke="#5CC8FF" stroke-width="8" opacity=".35"/>
     <circle r="20" fill="url(#s)" stroke="#2B2F3C" stroke-width="2"/>
-    <path d="M0 -12 L10 0 L0 12 L-10 0 Z" fill="#14C8E8"/>
-    <g stroke="#E9D5FF" stroke-width="2.5" stroke-linecap="round" fill="none">
+    <path d="M0 -12 L10 0 L0 12 L-10 0 Z" fill="#2FD3FF"/>
+    <g stroke="#D6F3FF" stroke-width="2.5" stroke-linecap="round" fill="none">
       <path d="M0 -44 v10 M0 -44 l5 4"/><path d="M0 34 v10 M-4 34 l8 10"/><path d="M-44 0 h10 M-40 -4 v8"/><path d="M34 0 h10 M38 -5 l4 5 -4 5"/>
     </g>
   </g>
-  <path d="M30 168 h140 l-10 18 h-120 z" fill="#14C8E8"/>
-  <text x="100" y="182" text-anchor="middle" font-family="Oxanium, sans-serif" font-weight="700" font-size="15" fill="#0B0726" letter-spacing="2">RAGNAROK</text>
+  <path d="M30 168 h140 l-10 18 h-120 z" fill="#2FD3FF"/>
+  <text x="100" y="182" text-anchor="middle" font-family="Oxanium, sans-serif" font-weight="700" font-size="15" fill="#050608" letter-spacing="2">RAGNAROK</text>
 </svg>
