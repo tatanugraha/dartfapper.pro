@@ -1,54 +1,158 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>dartfapper — game buatan Tata</title>
-  <meta name="description" content="Kumpulan game buatan Tata Nugraha: Mythrix, server Ragnarok, dan yang lagi digarap.">
+  <meta name="description" content="Kumpulan game buatan Tata: Mythrix, server Ragnarok, dan game lain yang lagi digarap.">
   <meta property="og:title" content="dartfapper">
-  <meta property="og:description" content="Kumpulan game buatan Tata Nugraha. Pilih satu, langsung main.">
-  <meta name="theme-color" content="#14243A">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%2314243A'/%3E%3Ccircle cx='16' cy='16' r='11' fill='%23D8453B'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%23F1E6CC'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%232E8B57'/%3E%3C/svg%3E">
+  <meta property="og:description" content="Game indie buatan sendiri. Pilih satu, langsung main.">
+  <meta property="og:image" content="assets/images/hero-banner.svg">
+  <meta name="theme-color" content="#0B0726">
+  <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Figtree:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
 </head>
-<body>
-  <a class="skip" href="#games">Langsung ke daftar game</a>
 
-  <header class="top">
-    <a class="brand" href="./" aria-label="dartfapper, beranda">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--wall-2)"/><circle cx="16" cy="16" r="11" fill="var(--red)"/><circle cx="16" cy="16" r="7" fill="var(--sisal)"/><circle cx="16" cy="16" r="3" fill="var(--green)"/></svg>
-      dartfapper
-    </a>
-    <a class="discord" data-discord href="#" hidden>Gabung Discord</a>
+<body>
+
+  <!-- HEADER -->
+  <header class="header" data-header>
+    <div class="container">
+      <a href="#top" class="logo" aria-label="dartfapper, ke atas">
+        <img src="assets/images/favicon.svg" width="36" height="36" alt="">
+        <span>dart<b>fapper</b></span>
+      </a>
+
+      <nav class="navbar" data-navbar aria-label="Menu utama">
+        <ul class="navbar-list">
+          <li><a href="#top" class="navbar-link" data-nav-link>Home</a></li>
+          <li><a href="#games" class="navbar-link" data-nav-link>Game</a></li>
+          <li><a href="#service" class="navbar-link" data-nav-link>Jasa</a></li>
+          <li><a href="#news" class="navbar-link" data-nav-link>Update</a></li>
+          <li><a href="#contact" class="navbar-link" data-nav-link>Kontak</a></li>
+        </ul>
+      </nav>
+
+      <a href="#" class="btn btn-primary header-btn" data-discord target="_blank" rel="noopener">Gabung Discord</a>
+
+      <button class="nav-toggle-btn" aria-label="Buka menu" aria-expanded="false" data-nav-toggler>
+        <span class="line"></span><span class="line"></span><span class="line"></span>
+      </button>
+    </div>
   </header>
 
   <main>
-    <section class="hero">
-      <div class="hero-copy">
-        <h1>Pilih target,<br>langsung main.</h1>
-        <p class="lede">Semua game yang gue bikin ngumpul di sini. Ada yang udah jalan, ada yang masih dicoba-coba. Klik dart di papan, atau scroll ke bawah.</p>
-      </div>
-      <div class="board-wrap">
-        <svg class="board" id="board" viewBox="-220 -220 440 440" role="img" aria-label="Papan dart, tiap dart nunjuk ke satu game"></svg>
-        <p class="board-hint" id="board-hint" aria-live="polite">Arahkan ke dart buat lihat gamenya</p>
-      </div>
-    </section>
+    <article>
 
-    <section class="games" id="games" aria-labelledby="games-title">
-      <h2 id="games-title">Daftar game</h2>
-      <ul class="game-list" id="game-list"></ul>
-    </section>
+      <!-- HERO -->
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="container">
+          <p class="section-subtitle">Game indie buatan sendiri</p>
+          <h1 class="h1 hero-title" id="hero-title">Duel kartu, grinding,<br>semua di satu tempat</h1>
+          <a href="#games" class="btn btn-primary">Lihat semua game</a>
+        </div>
+        <figure class="hero-banner">
+          <img src="assets/images/hero-banner.svg" width="1200" height="520" alt="Perisai rune Ragnarok diapit kartu-kartu Mythrix">
+        </figure>
+      </section>
+
+      <!-- GAMES (gaya "upcoming matches") -->
+      <section class="section games" id="games" aria-labelledby="games-label">
+        <div class="container">
+          <p class="section-subtitle" id="games-label" data-reveal>Daftar game</p>
+          <h2 class="h2 section-title" data-reveal>Pilih game, <span class="span">langsung main</span></h2>
+          <p class="section-text" data-reveal>Ada yang udah jalan, ada yang masih beta. Semua dibikin dan diurus sendiri.</p>
+
+          <ul class="game-list" id="game-list"></ul>
+        </div>
+      </section>
+
+      <!-- JASA -->
+      <section class="section service" id="service" aria-labelledby="service-title">
+        <div class="container">
+          <div class="service-card" data-reveal>
+            <div class="service-copy">
+              <p class="section-subtitle">Jasa</p>
+              <h2 class="h2" id="service-title">Mau punya server Ragnarok sendiri?</h2>
+              <p class="service-text">Gue bantu dari nol sampai online: setup emulator, script custom, client, sampai web panel buat pemain lo.</p>
+              <ul class="service-points">
+                <li>Setup rAthena di VPS, siap online</li>
+                <li>NPC &amp; sistem custom (event, gacha, battle pass, dll)</li>
+                <li>Client, GRF, dan patcher</li>
+                <li>Web panel buat register &amp; donasi</li>
+              </ul>
+              <a class="btn btn-primary" data-gig href="#" target="_blank" rel="noopener">Order di Fiverr</a>
+            </div>
+            <img class="service-art" src="assets/images/emblem-ragnarok.svg" width="260" height="260" alt="" loading="lazy">
+          </div>
+        </div>
+      </section>
+
+      <!-- NEWS -->
+      <section class="section news" id="news" aria-labelledby="news-label">
+        <div class="container">
+          <p class="section-subtitle" id="news-label" data-reveal>Kabar terbaru</p>
+          <h2 class="h2 section-title" data-reveal>Update <span class="span">& patch notes</span></h2>
+          <p class="section-text" data-reveal>Event, patch, sama progres game yang lagi digarap.</p>
+
+          <ul class="news-list" id="news-list"></ul>
+        </div>
+      </section>
+
+    </article>
   </main>
 
-  <footer class="foot">
-    <p>Dibikin sama Tata Nugraha. <a data-discord href="#" hidden>Discord</a></p>
-    <p class="small">Ragnarok Online adalah merek dagang Gravity Co., Ltd. Situs ini fan project dan nggak berafiliasi.</p>
+  <!-- FOOTER -->
+  <footer class="footer" id="contact">
+    <div class="section footer-top">
+      <div class="container">
+
+        <div class="footer-brand">
+          <a href="#top" class="logo">
+            <img src="assets/images/favicon.svg" width="36" height="36" alt="">
+            <span>dart<b>fapper</b></span>
+          </a>
+          <p class="footer-text">Rumah buat game-game yang gue bikin sendiri: server Ragnarok, game kartu Mythrix, dan yang nyusul.</p>
+        </div>
+
+        <ul class="footer-list">
+          <li><p class="footer-list-title">Game</p></li>
+          <li data-footer-games></li>
+        </ul>
+
+        <ul class="footer-list">
+          <li><p class="footer-list-title">Navigasi</p></li>
+          <li><a href="#top" class="footer-link">Home</a></li>
+          <li><a href="#games" class="footer-link">Game</a></li>
+          <li><a href="#news" class="footer-link">Update</a></li>
+        </ul>
+
+        <div class="footer-list">
+          <p class="footer-list-title">Komunitas</p>
+          <p class="footer-text">Kabar event, giveaway, dan tes beta duluan di Discord.</p>
+          <a href="#" class="btn btn-primary" data-discord target="_blank" rel="noopener">Gabung Discord</a>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="container">
+        <p class="copyright">&copy; <span data-year></span> dartfapper. Dibikin sama Tata Nugraha.</p>
+        <p class="copyright small">Ragnarok Online adalah merek dagang Gravity Co., Ltd.; situs ini fan project dan nggak berafiliasi. Layout terinspirasi <a href="https://github.com/codewithsadee/unigine" target="_blank" rel="noopener">Unigine</a> (MIT).</p>
+      </div>
+    </div>
   </footer>
 
-  <script src="games.js"></script>
-  <script src="main.js"></script>
+  <a href="#top" class="back-top-btn" aria-label="Kembali ke atas" data-back-top-btn>
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 5l-7 7h4v7h6v-7h4z" fill="currentColor"/></svg>
+  </a>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/script.js"></script>
 </body>
 </html>

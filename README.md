@@ -1,37 +1,42 @@
 # dartfapper.pro
 
-Hub semua game buatan Tata. Static site, di-host GitHub Pages, auto-update tiap push ke `main`.
+Hub semua game buatan Tata. Static site di GitHub Pages, auto-update tiap push ke `main`.
+Layout terinspirasi [Unigine](https://github.com/codewithsadee/unigine) (MIT).
 
-## Nambah / ubah game
+## Struktur
 
-Edit `games.js` aja. Tiap game satu objek:
+```
+index.html
+assets/
+  css/style.css
+  js/data.js      <- ISI WEBSITE: game, update, link Discord & Fiverr
+  js/script.js
+  images/         <- hero banner, emblem game, favicon (SVG)
+games/            <- (opsional) game yang di-host di sini, satu folder per game
+CNAME             <- jangan dihapus, ini buat custom domain
+```
+
+## Nambah game
+
+Buka `assets/js/data.js`, tambah objek di `window.GAMES`:
 
 ```js
 {
-  id: "mythrix",            // slug unik
-  title: "Mythrix",
-  kind: "Game kartu",
-  status: "beta",           // live | beta | soon
+  id: "game-baru",
+  title: "Game Baru",
+  tag: "Puzzle",
+  status: "beta",          // live | beta | soon
+  info: "Main di browser",
   blurb: "Deskripsi singkat.",
-  url: "games/mythrix/",    // atau link luar https://...
-  cta: "Main sekarang",
-  color: "#D8453B"
+  emblem: "assets/images/emblem-game-baru.svg",   // png/jpg juga bisa
+  url: "games/game-baru/", // atau https://...
+  cta: "Main sekarang"
 }
 ```
 
-Dart di papan dan kartu di daftar kebikin otomatis dari list ini.
+## Nambah update
 
-## Game yang di-host di repo ini
-
-Taruh tiap game di foldernya sendiri, dengan `index.html` di dalamnya:
-
-```
-games/
-  mythrix/index.html   -> dartfapper.pro/games/mythrix/
-  game-2/index.html    -> dartfapper.pro/games/game-2/
-```
-
-Terus isi `url: "games/mythrix/"` di `games.js`.
+Tambah objek di `window.NEWS` (yang paling atas tampil duluan).
 
 ## Deploy
 
@@ -40,5 +45,3 @@ git add .
 git commit -m "update"
 git push
 ```
-
-GitHub Pages: Settings → Pages → Source `main` / root, Custom domain `dartfapper.pro`.
