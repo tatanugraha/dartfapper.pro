@@ -48,6 +48,9 @@ Tambah objek di `window.NEWS` (yang paling atas tampil duluan).
 
 ## Deploy
 
+Habis ngubah CSS/JS, naikin `?v=...` di tag `<link>`/`<script>` (index.html, contact/, moro/)
+biar browser pengunjung langsung ambil versi baru, bukan cache lama.
+
 ```
 git add .
 git commit -m "update"
