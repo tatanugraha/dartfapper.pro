@@ -231,6 +231,20 @@ window.NATIVE_UI = [
     }
   },
   {
+    name: { en: "Social & Profile", id: "Social & Profil" },
+    image: "assets/images/native/social-profile.jpg",
+    pages: [
+      { label: "My profile", image: "assets/images/native/social-profile.jpg" },
+      { label: "For You", image: "assets/images/native/social-foryou.jpg" },
+      { label: "Feed", image: "assets/images/native/social-feed.jpg" },
+      { label: "Friend", image: "assets/images/native/social-friend.jpg" }
+    ],
+    text: {
+      en: "A small social network inside the game. Profiles show gear score, Battlepass level, MVP kills, rank, achievements and MVP trophies, with custom backgrounds for VIP and GM. Bio updates become posts players can love in For You and Feed, and the Friend tab uses the game's own friend list, with suggestions from party and guild.",
+      id: "Jejaring sosial kecil di dalam game. Profil nampilin gear score, level Battlepass, kill MVP, rank, achievement, dan trofi MVP, dengan latar custom buat VIP dan GM. Update bio jadi postingan yang bisa di-love di For You dan Feed, dan tab Friend pakai friend list asli game, plus saran dari party dan guild."
+    }
+  },
+  {
     name: "Auto Potion",
     image: "assets/images/native/autopotion.jpg",
     text: {
@@ -269,9 +283,15 @@ window.NATIVE_UI = [
   {
     name: "Stylist",
     image: "assets/images/native/stylist.jpg",
+    pages: [
+      { label: { en: "Hair", id: "Rambut" }, image: "assets/images/native/stylist.jpg" },
+      { label: { en: "Accessories", id: "Aksesori" }, image: "assets/images/native/stylist-accessories.jpg" },
+      { label: "Outfit", image: "assets/images/native/stylist-outfit.jpg" },
+      { label: "Wardrobe", image: "assets/images/native/stylist-wardrobe.jpg" }
+    ],
     text: {
-      en: "The built-in stylist, fixed: numbered hairstyle and hair-colour pickers and an outfit tab that works for every job.",
-      id: "Stylist bawaan yang sudah diperbaiki: pilihan gaya dan warna rambut bernomor, plus tab outfit yang jalan di semua job."
+      en: "The built-in stylist, fixed and extended: numbered pickers for 42 hairstyles, 131 hair colours and 668 clothing colours, an outfit tab that works for every job, accessories, and a wardrobe of saved looks.",
+      id: "Stylist bawaan yang sudah diperbaiki dan ditambah: pilihan bernomor untuk 42 gaya rambut, 131 warna rambut, dan 668 warna baju, tab outfit yang jalan di semua job, aksesori, dan wardrobe buat simpan tampilan."
     }
   },
   {
@@ -286,7 +306,6 @@ window.NATIVE_UI = [
 
 // Built and running, no screenshot on the page yet.
 window.NATIVE_MORE = [
-  { name: { en: "Profile & Social", id: "Profil & Social" }, text: { en: "Player profiles with bio and custom VIP/GM backgrounds", id: "Profil pemain dengan bio dan latar custom VIP/GM" } },
   { name: { en: "Nick colours & rank emblems", id: "Warna nick & emblem rank" }, text: { en: "Coloured names and chat bubbles, rank badges", id: "Nama dan balon chat berwarna, badge rank" } },
   { name: { en: "Skill visuals", id: "Visual skill" }, text: { en: "Per-player skill effects from the Skill gear slots", id: "Efek skill per pemain dari slot gear Skill" } },
   { name: { en: "GO menu", id: "Menu GO" }, text: { en: "One button next to the cash shop that opens every custom window", id: "Satu tombol di samping cash shop buat buka semua window custom" } }
