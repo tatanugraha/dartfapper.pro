@@ -175,10 +175,19 @@ body.nav-active { overflow: hidden; }
 .hero-stats span { font-size: .85rem; color: var(--text-muted); }
 .hero-banner { margin-top: 24px; max-width: 1200px; margin-inline: auto; position: relative; }
 .hero-banner::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30%;
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30%; pointer-events: none;
   background: linear-gradient(to top, var(--bg-deep), transparent);
 }
-.hero-banner img { width: 100%; animation: float 6s ease-in-out infinite; }
+.hero-banner img {
+  width: 100%;
+  /* fade the art's edges into the dark page */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent), linear-gradient(to bottom, transparent, #000 10%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent), linear-gradient(to bottom, transparent, #000 10%);
+  mask-composite: intersect;
+  transition: transform .8s var(--cubic-out);
+}
+.hero-banner a:hover img { transform: scale(1.015); }
 @keyframes float { 50% { transform: translateY(-10px); } }
 
 /*-----------------------------------*\
