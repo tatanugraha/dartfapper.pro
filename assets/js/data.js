@@ -29,6 +29,20 @@ window.GAMES = [
     cta: { en: "See servers", id: "Lihat server" }
   },
   {
+    id: "moro",
+    title: "MoRo",
+    tag: { en: "Mobile RO client", id: "Client RO mobile" },
+    status: "live",
+    info: { en: "2 servers on MoRo · Android", id: "2 server pakai MoRo · Android" },
+    blurb: {
+      en: "Ragnarok Online made for your phone. Your rAthena server as an Android app, with a UI built for thumbs.",
+      id: "Ragnarok Online yang dibikin buat HP. Server rAthena lo jadi app Android, UI-nya pas di jempol."
+    },
+    emblem: "assets/images/emblem-moro.png",
+    url: "moro/", // switch to "https://moro.dartfapper.pro/" once that subdomain is live
+    cta: { en: "Explore MoRo", id: "Lihat MoRo" }
+  },
+  {
     id: "mythrix",
     title: "Mythrix",
     tag: { en: "Card game", id: "Game kartu" },

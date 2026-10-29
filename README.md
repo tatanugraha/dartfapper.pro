@@ -35,6 +35,13 @@ Buka `assets/js/data.js`, tambah objek di `window.GAMES`:
 }
 ```
 
+## Halaman MoRo (`moro/`)
+
+Halaman produk MoRo, berdiri sendiri (CSS/JS/gambar sendiri di `moro/assets/`), jadi folder ini
+bisa dipindah ke repo lain buat subdomain `moro.dartfapper.pro`.
+Isi teks, daftar server yang pakai MoRo, spesifikasi, FAQ: `moro/assets/moro.js` (paling atas).
+Server baru pakai MoRo? Tambah di `MORO_SERVERS`, angka "server sudah pakai MoRo" ikut berubah.
+
 ## Nambah update
 
 Tambah objek di `window.NEWS` (yang paling atas tampil duluan).

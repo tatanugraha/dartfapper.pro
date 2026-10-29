@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoRo · Mobile Ragnarok Engine</title>
+  <meta name="description" content="MoRo turns your rAthena server into an Android app. Packet 2003–2025, 3rd & 4th job effects, modern UI, signed OTA updates, your own branding.">
+  <meta property="og:title" content="MoRo · Mobile Ragnarok Engine">
+  <meta property="og:description" content="Ragnarok Online, made for your phone. Your rAthena server as a branded Android app.">
+  <meta property="og:image" content="assets/img/hero.jpg">
+  <meta name="theme-color" content="#050608">
+  <link rel="icon" href="assets/img/icon-otti.png" type="image/png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/moro.css">
+</head>
+
+<body>
+
+  <!-- NAV -->
+  <header class="nav" data-nav>
+    <div class="wrap nav-row">
+      <a href="#top" class="nav-brand" aria-label="MoRo home">
+        <img src="assets/img/moro-logo.png" width="120" height="68" alt="MoRo">
+      </a>
+      <nav class="nav-links" aria-label="Product sections">
+        <a href="#tour" data-i18n="nav.tour">Tour</a>
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#how" data-i18n="nav.how">How it works</a>
+        <a href="#specs" data-i18n="nav.specs">Specs</a>
+        <a href="#pricing" data-i18n="nav.pricing">Pricing</a>
+      </nav>
+      <div class="nav-actions">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" data-lang-btn="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang-btn="id" aria-pressed="false">ID</button>
+        </div>
+        <a class="btn btn-primary btn-sm" data-discord href="#" target="_blank" rel="noopener" data-i18n="cta.get">Get MoRo</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-bg" aria-hidden="true"><img src="assets/img/hero.jpg" alt="" width="1600" height="900"></div>
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="kicker" data-i18n="hero.kicker">Mobile Ragnarok Engine</p>
+          <h1 class="hero-title" data-i18n-html="hero.title">Ragnarok Online,<br><span>made for your phone.</span></h1>
+          <p class="hero-text" data-i18n="hero.text">MoRo turns your rAthena server into an Android app. Your players join the same world as PC, from their phone, with a UI built for thumbs.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" data-discord href="#" target="_blank" rel="noopener" data-i18n="cta.getFor">Get MoRo for your server</a>
+            <a class="btn btn-ghost" href="#tour" data-i18n="cta.see">See it in action</a>
+          </div>
+          <p class="hero-joined">
+            <span class="joined-icons" data-joined-icons></span>
+            <span data-joined-text></span>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHOWCASE -->
+    <section class="showcase">
+      <div class="wrap">
+        <figure class="phone" aria-label="MoRo running on a phone">
+          <div class="phone-screen">
+            <img src="assets/img/shot-hud.jpg" width="1067" height="600" alt="MoRo in-game in Prontera: joystick, skill buttons, chat and minimap">
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="stats" aria-label="MoRo at a glance">
+      <ul class="wrap stat-row">
+        <li data-reveal><strong>2003–2025</strong><span data-i18n="stat.packet">packet versions supported</span></li>
+        <li data-reveal><strong data-i18n="stat.fpsNum">50 FPS</strong><span data-i18n="stat.fps">at native resolution</span></li>
+        <li data-reveal><strong>0</strong><span data-i18n="stat.ota">reinstalls: fixes arrive over the air</span></li>
+        <li data-reveal><strong><b data-stat="joined">2</b></strong><span data-i18n="stat.joined">servers already on MoRo</span></li>
+      </ul>
+    </section>
+
+    <!-- TOUR -->
+    <section class="section" id="tour">
+      <div class="wrap">
+        <p class="kicker center" data-reveal data-i18n="tour.kicker">The tour</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="tour.title">Every button where <span>your thumb already is</span></h2>
+        <p class="lead center" data-reveal data-i18n="tour.text">Not a PC client shrunk down. Tap a number to see what each part of the screen does.</p>
+
+        <div class="tour" data-reveal>
+          <div class="tour-shot">
+            <img src="assets/img/shot-hud.jpg" width="1067" height="600" alt="MoRo in-game screen" loading="lazy">
+            <div data-hotspots></div>
+          </div>
+          <ol class="tour-list" data-tour-list></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section class="section alt" id="features">
+      <div class="wrap">
+        <p class="kicker center" data-reveal data-i18n="feat.kicker">Features</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="feat.title">Everything your players expect, <span>none of the PC baggage</span></h2>
+        <ul class="feat-grid" data-features></ul>
+      </div>
+    </section>
+
+    <!-- GALLERY -->
+    <section class="section">
+      <div class="wrap">
+        <p class="kicker center" data-reveal data-i18n="gal.kicker">Real screens</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="gal.title">Captured from <span>live servers</span></h2>
+        <p class="lead center" data-reveal data-i18n="gal.text">No mockups. These are MoRo builds running on servers that use it today.</p>
+        <ul class="gallery">
+          <li data-reveal><figure><img src="assets/img/shot-menu.jpg" width="1067" height="600" alt="" loading="lazy"><figcaption data-i18n="gal.c1">Full menu one tap away: bag, equip, quests, guild, map</figcaption></figure></li>
+          <li data-reveal><figure><img src="assets/img/shot-walk.jpg" width="1067" height="600" alt="" loading="lazy"><figcaption data-i18n="gal.c2">Tap to walk, with the route drawn on the ground</figcaption></figure></li>
+          <li data-reveal><figure><img src="assets/img/shot-login.jpg" width="1067" height="600" alt="" loading="lazy"><figcaption data-i18n="gal.c3">Login with your server's own branding</figcaption></figure></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="section alt" id="how">
+      <div class="wrap">
+        <p class="kicker center" data-reveal data-i18n="how.kicker">For server owners</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="how.title">From your server to <span>their phones</span></h2>
+        <ol class="steps" data-steps></ol>
+      </div>
+    </section>
+
+    <!-- SERVERS ON MORO -->
+    <section class="section" id="servers">
+      <div class="wrap brand-grid">
+        <div data-reveal>
+          <p class="kicker" data-i18n="srv.kicker">Already on MoRo</p>
+          <h2 class="h2"><span class="big-num" data-stat="joined">2</span> <span data-i18n="srv.title">servers, one engine</span></h2>
+          <p class="lead" data-i18n="srv.text">Every server gets its own app: its own name, icon, splash and loading screens. Underneath, they all run the same MoRo engine, so a fix for one reaches all of them.</p>
+          <a class="btn btn-primary" data-discord href="#" target="_blank" rel="noopener" data-i18n="srv.cta">Add your server</a>
+        </div>
+        <ul class="srv-list" data-servers></ul>
+      </div>
+    </section>
+
+    <!-- COMPARE -->
+    <section class="section alt">
+      <div class="wrap narrow">
+        <p class="kicker center" data-reveal data-i18n="cmp.kicker">Compare</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="cmp.title">More client, <span>less cost</span></h2>
+        <div class="table-wrap" data-reveal>
+          <table class="cmp">
+            <thead><tr><th></th><th data-i18n="cmp.other">Other paid mobile client</th><th class="hl">MoRo</th></tr></thead>
+            <tbody>
+              <tr><th data-i18n="cmp.r1">Packet version</th><td data-i18n="cmp.r1a">up to 2022</td><td class="hl" data-i18n="cmp.r1b">up to 2025</td></tr>
+              <tr><th data-i18n="cmp.r2">3rd job effects</th><td data-i18n="cmp.no">not supported</td><td class="hl" data-i18n="cmp.yes">included</td></tr>
+              <tr><th data-i18n="cmp.r3">Modern UI</th><td data-i18n="cmp.many">many missing</td><td class="hl" data-i18n="cmp.yes">included</td></tr>
+              <tr><th data-i18n="cmp.r4">Year 1</th><td>$750</td><td class="hl">$300</td></tr>
+              <tr><th data-i18n="cmp.r5">Year 2+</th><td data-i18n="cmp.r5a">$600 / year</td><td class="hl" data-i18n="cmp.r5b">$96 / year</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="fine center" data-i18n="cmp.note">Comparison based on public listings, October 2026.</p>
+      </div>
+    </section>
+
+    <!-- SPECS -->
+    <section class="section" id="specs">
+      <div class="wrap narrow">
+        <p class="kicker center" data-reveal data-i18n="spec.kicker">Tech specs</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="spec.title">The <span>fine print</span></h2>
+        <dl class="specs" data-specs data-reveal></dl>
+      </div>
+    </section>
+
+    <!-- PRICING -->
+    <section class="section alt" id="pricing">
+      <div class="wrap narrow">
+        <p class="kicker center" data-reveal data-i18n="price.kicker">Pricing</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="price.title">One price, <span>first year included</span></h2>
+        <div class="price-card" data-reveal>
+          <div class="price-main">
+            <p class="price-amount"><span>$300</span><small data-i18n="price.once">one-time</small></p>
+            <p class="price-sub" data-i18n="price.incl">Includes the first 12 months</p>
+            <ul class="checks">
+              <li data-i18n="price.p1">Branded APK: your name, icon, splash, loading screens</li>
+              <li data-i18n="price.p2">Game data hosting setup</li>
+              <li data-i18n="price.p3">Connection & packet check against your server</li>
+              <li data-i18n="price.p4">Updates and support</li>
+            </ul>
+            <a class="btn btn-primary" data-discord href="#" target="_blank" rel="noopener" data-i18n="cta.getFor">Get MoRo for your server</a>
+          </div>
+          <div class="price-side">
+            <div><strong data-i18n="price.after">$8 / month</strong><span data-i18n="price.afterText">after the first year: updates, fixes, support</span></div>
+            <div><strong data-i18n="price.ui">from $30</strong><span data-i18n="price.uiText">per custom UI window</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" id="faq">
+      <div class="wrap narrow">
+        <p class="kicker center" data-reveal data-i18n="faq.kicker">FAQ</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="faq.title">Questions <span>owners ask</span></h2>
+        <div class="faq" data-faq></div>
+      </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <section class="final">
+      <div class="wrap final-inner" data-reveal>
+        <img src="assets/img/moro-logo.png" width="320" height="180" alt="" loading="lazy">
+        <h2 class="h2" data-i18n="final.title">Put your server in their pocket.</h2>
+        <p class="lead" data-i18n="final.text">Message on Discord with your server name and packet version.</p>
+        <a class="btn btn-primary" data-discord href="#" target="_blank" rel="noopener" data-i18n="cta.discord">Talk on Discord</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <p>&copy; <span data-year></span> MoRo · <a href="https://dartfapper.pro/">dartfapper.pro</a></p>
+      <p class="fine" data-i18n="foot.legal">Built on roBrowserLegacy (GPL-3.0). Ragnarok Online is a trademark of Gravity Co., Ltd.; MoRo is not affiliated with Gravity.</p>
+    </div>
+  </footer>
+
+  <script src="assets/moro.js"></script>
+</body>
+</html>
