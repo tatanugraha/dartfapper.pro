@@ -297,9 +297,23 @@ window.NATIVE_UI = [
   {
     name: "Voice chat",
     image: "assets/images/native/voice.jpg",
+    pages: [
+      { label: { en: "Settings", id: "Setting" }, image: "assets/images/native/voice.jpg" },
+      { label: "Players", image: "assets/images/native/voice-players.jpg" },
+      { label: "Devices", image: "assets/images/native/voice-devices.jpg" },
+      { label: { en: "Chat bar", id: "Bar chat" }, image: "assets/images/native/voice-bar.jpg" }
+    ],
     text: {
-      en: "In-game voice with push-to-talk or open mic, a rebindable talk key, per-player volume and device choice. PC and MoRo mobile players talk to each other.",
-      id: "Voice di dalam game: push-to-talk atau open mic, tombol bicara bisa diganti, volume per pemain, dan pilihan device. Pemain PC dan MoRo mobile bisa ngobrol bareng."
+      en: "In-game voice with push-to-talk or open mic, a rebindable talk key and separate mic, speaker and ringtone volume. The Players tab sets volume per nearby player, Devices picks the mic and speaker, and mute buttons sit on the chat bar. PC and MoRo mobile players talk to each other.",
+      id: "Voice di dalam game: push-to-talk atau open mic, tombol bicara bisa diganti, dan volume mic, speaker, ringtone terpisah. Tab Players atur volume per pemain di sekitar, Devices buat pilih mic dan speaker, dan tombol mute ada di bar chat. Pemain PC dan MoRo mobile bisa ngobrol bareng."
+    }
+  },
+  {
+    name: { en: "Shortcut settings", id: "Pengaturan shortcut" },
+    image: "assets/images/native/shortcuts.jpg",
+    text: {
+      en: "Every custom window gets a row in the game's own Shortcut Settings, on a new widget-panel tab. Nothing is bound by default; players pick their own keys, including toggles for Auto Skill, LGP and Auto Hunt.",
+      id: "Tiap window custom dapat baris di Shortcut Settings bawaan game, di tab widget panel baru. Nggak ada tombol default; pemain pilih sendiri, termasuk tombol on/off buat Auto Skill, LGP, dan Auto Hunt."
     }
   }
 ];
