@@ -177,6 +177,10 @@ window.NATIVE_UI = [
     name: "Battlepass",
     image: "assets/images/native/battlepass.jpg",
     wide: true,
+    pages: [
+      { label: "Free", image: "assets/images/native/battlepass.jpg" },
+      { label: "Premium", image: "assets/images/native/battlepass-premium.jpg" }
+    ],
     text: {
       en: "Seasons with a free and a premium reward track. Daily quests and weekly MVP hunts count up live as players kill monsters, and rewards are claimed straight from the window.",
       id: "Season dengan jalur hadiah free dan premium. Daily quest dan weekly MVP hunt nambah langsung tiap pemain bunuh monster, hadiah diklaim langsung dari window."
@@ -186,9 +190,44 @@ window.NATIVE_UI = [
     name: "Card Collector",
     image: "assets/images/native/cardcollector.jpg",
     wide: true,
+    pages: [
+      { label: "All Card", image: "assets/images/native/cardcollector.jpg" },
+      { label: "Set Card", image: "assets/images/native/cardcollector-set.jpg" },
+      { label: "Owned Card", image: "assets/images/native/cardcollector-owned.jpg" },
+      { label: "My Album", image: "assets/images/native/cardcollector-album.jpg" }
+    ],
     text: {
       en: "An album of every card in the game. Players deposit cards, complete sets for permanent bonuses, and search or filter by set, owned cards, or their own album.",
       id: "Album semua kartu di game. Pemain setor kartu, lengkapi set buat bonus permanen, dan cari atau filter per set, kartu yang dimiliki, atau album sendiri."
+    }
+  },
+  {
+    name: "Auto Hunt",
+    image: "assets/images/native/autohunt-basic.jpg",
+    pages: [
+      { label: "Basic", image: "assets/images/native/autohunt-basic.jpg" },
+      { label: "Monster", image: "assets/images/native/autohunt-monster.jpg" },
+      { label: "Skill", image: "assets/images/native/autohunt-skill.jpg" },
+      { label: "Potion", image: "assets/images/native/autohunt-potion.jpg" },
+      { label: "Looting", image: "assets/images/native/autohunt-looting.jpg" },
+      { label: "Move", image: "assets/images/native/autohunt-move.jpg" },
+      { label: "Item", image: "assets/images/native/autohunt-item.jpg" }
+    ],
+    text: {
+      en: "Seven tabs to set up hunting: which monsters to fight, attack skills in order, HP and SP potions, what to loot, teleport and return rules, and buff items. Settings are saved per character; hunting time comes from free daily hours or tickets.",
+      id: "Tujuh tab buat atur hunting: monster mana yang dilawan, urutan skill serang, potion HP dan SP, apa yang di-loot, aturan teleport dan pulang, dan item buff. Setting disimpan per karakter; waktu hunting dari jatah gratis harian atau tiket."
+    }
+  },
+  {
+    name: "Attendance",
+    image: "assets/images/native/attendance.jpg",
+    pages: [
+      { label: { en: "30 days", id: "30 hari" }, image: "assets/images/native/attendance.jpg" },
+      { label: "VIP", image: "assets/images/native/attendance-vip.jpg" }
+    ],
+    text: {
+      en: "A 30-day check-in calendar for each event period, with today's reward highlighted and rewards sent to the mailbox. A second page holds a 28-day VIP daily reward that goes straight to the inventory.",
+      id: "Kalender check-in 30 hari tiap periode event, hadiah hari ini ditandai dan dikirim ke mailbox. Halaman kedua berisi hadiah harian VIP 28 hari yang langsung masuk inventory."
     }
   },
   {
@@ -218,9 +257,13 @@ window.NATIVE_UI = [
   {
     name: "Graymap",
     image: "assets/images/native/graymap.jpg",
+    pages: [
+      { label: "Graymap", image: "assets/images/native/graymap.jpg" },
+      { label: "LGP", image: "assets/images/native/lgp.jpg" }
+    ],
     text: {
-      en: "Draws the map as flat coloured cells so walkable ground, walls, water and shootable walls are easy to read in PvP and WoE. Every colour is adjustable; the LGP tab shows ground-skill cells.",
-      id: "Gambar map jadi kotak warna polos, jadi tanah jalan, tembok, air, dan tembok tembak gampang kebaca waktu PvP dan WoE. Semua warna bisa diatur; tab LGP nampilin cell skill tanah."
+      en: "Draws the map as flat coloured cells so walkable ground, walls, water and shootable walls are easy to read in PvP and WoE. Every colour is adjustable. The LGP tab draws ground-skill cells around the player as squares or circles, with dead cells, gutter lines and optional music-synced waves.",
+      id: "Gambar map jadi kotak warna polos, jadi tanah jalan, tembok, air, dan tembok tembak gampang kebaca waktu PvP dan WoE. Semua warna bisa diatur. Tab LGP gambar cell skill tanah di sekitar pemain (kotak atau lingkaran), plus dead cell, garis antar cell, dan gelombang yang bisa ikut musik."
     }
   },
   {
@@ -243,8 +286,6 @@ window.NATIVE_UI = [
 
 // Built and running, no screenshot on the page yet.
 window.NATIVE_MORE = [
-  { name: "Attendance", text: { en: "7-day reward rows plus a VIP daily page", id: "Hadiah login 7 hari per baris plus halaman VIP harian" } },
-  { name: "Auto Hunt", text: { en: "Seven-tab auto hunt setup, if the server allows it", id: "Setup auto hunt 7 tab, kalau server ngizinin" } },
   { name: { en: "Profile & Social", id: "Profil & Social" }, text: { en: "Player profiles with bio and custom VIP/GM backgrounds", id: "Profil pemain dengan bio dan latar custom VIP/GM" } },
   { name: { en: "Nick colours & rank emblems", id: "Warna nick & emblem rank" }, text: { en: "Coloured names and chat bubbles, rank badges", id: "Nama dan balon chat berwarna, badge rank" } },
   { name: { en: "Skill visuals", id: "Visual skill" }, text: { en: "Per-player skill effects from the Skill gear slots", id: "Efek skill per pemain dari slot gear Skill" } },

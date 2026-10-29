@@ -120,12 +120,24 @@ function renderNative() {
       <div class="native-body">
         <h3 class="native-name">${esc(tx(n.name))}</h3>
         <p class="native-text">${esc(tx(n.text))}</p>
+        ${n.pages ? `<div class="native-pages" role="group" aria-label="${esc(ui("native.pages"))}">${n.pages.map((pg, k) =>
+          `<button type="button" data-page="${esc(pg.image)}" aria-pressed="${k === 0}">${esc(tx(pg.label))}</button>`).join("")}</div>` : ""}
       </div>
     </li>`).join("");
   $("#native-more").innerHTML = NATIVE_MORE.map((n) =>
     `<li><strong>${esc(tx(n.name))}</strong><span>${esc(tx(n.text))}</span></li>`).join("");
   if (!NATIVE_UI.length) $("#features").hidden = true;
 }
+
+// windows with several tabs/pages: the buttons swap the screenshot
+$("#native-grid").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-page]");
+  if (!btn) return;
+  const item = btn.closest(".native-item");
+  const shot = $(".native-shot", item);
+  $("img", shot).src = shot.href = btn.dataset.page;
+  $$("[data-page]", item).forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+});
 
 function renderFooterServers() {
   const list = $("[data-footer-servers]");

@@ -527,3 +527,18 @@ a.server-card:hover .server-link::before { width: 34px; }
   .native-shot { padding: 10px; min-height: 0; }
   .native-more ul { grid-template-columns: 1fr; }
 }
+.native-pages { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.native-pages button { font-family: var(--ff-oxanium); font-weight: 600; font-size: .8rem; padding: 6px 12px; color: var(--text-muted); background: var(--bg-surface-2); border: 1px solid var(--border-space-cadet); transition: var(--transition-1); }
+.native-pages button:hover { color: var(--text-white); }
+.native-pages button[aria-pressed="true"] { color: var(--cyan); border-color: var(--cyan); background: var(--glow-alpha-12); }
+.header-btn, .login-btn { white-space: nowrap; }
+@media (max-width: 1240px) and (min-width: 821px) {
+  .header .container { gap: 12px; }
+  .navbar-link { padding: 8px 9px; font-size: .9rem; }
+  .navbar-link::after { left: 9px; right: 9px; }
+}
+.logo { flex-shrink: 0; }
+@media (max-width: 1100px) and (min-width: 821px) {
+  .navbar-list li:first-child { display: none; }
+}
+@media (max-width: 1000px) { .header-btn { display: none; } }
