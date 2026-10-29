@@ -6,6 +6,8 @@
 // =====================================================================
 
 const DISCORD_URL = "https://discord.gg/cM69F5Gr2E";
+// contact form on the main site (also the Google Ads lead page)
+const CONTACT_URL = "https://dartfapper.pro/contact/?service=moro";
 
 // Servers running a MoRo build. The "servers on MoRo" counters use this list.
 const MORO_SERVERS = [
@@ -116,7 +118,7 @@ const DICT = {
     "price.ui": "from $30", "price.uiText": "per custom UI window",
     "faq.kicker": "FAQ", "faq.title": "Questions <span>owners ask</span>",
     "final.title": "Put your server in their pocket.",
-    "final.text": "Message on Discord with your server name and packet version.",
+    "final.text": "Send your server name and packet version through the contact form, or message on Discord.",
     "foot.legal": "Built on roBrowserLegacy (GPL-3.0). Ragnarok Online is a trademark of Gravity Co., Ltd.; MoRo is not affiliated with Gravity."
   },
   id: {
@@ -157,7 +159,7 @@ const DICT = {
     "price.ui": "mulai $30", "price.uiText": "per jendela UI custom",
     "faq.kicker": "FAQ", "faq.title": "Yang sering <span>ditanya owner</span>",
     "final.title": "Taruh server lo di saku pemain.",
-    "final.text": "Chat di Discord, sebutin nama server dan packet version lo.",
+    "final.text": "Kirim nama server dan packet version lo lewat form kontak, atau chat di Discord.",
     "foot.legal": "Dibangun di atas roBrowserLegacy (GPL-3.0). Ragnarok Online adalah merek dagang Gravity Co., Ltd.; MoRo nggak berafiliasi dengan Gravity."
   }
 };
@@ -261,6 +263,7 @@ function observeReveal() {
 render();
 
 $$("[data-discord]").forEach((a) => (a.href = DISCORD_URL));
+$$("[data-contact]").forEach((a) => (a.href = CONTACT_URL));
 $("[data-year]").textContent = new Date().getFullYear();
 
 const nav = $("[data-nav]");

@@ -4,12 +4,15 @@
 //   GET  /auth/discord/callback  -> back from Discord, redirect to SITE_URL/#auth=<token>
 //   GET  /api/me                 -> current user (Authorization: Bearer <token>)
 //   POST /api/logout             -> end the current session
+//   POST /api/contact            -> store a contact request (and ping Discord if DISCORD_WEBHOOK_URL is set)
 
 const SESSION_DAYS = 30;
 const STATE_COOKIE = "oauth_state";
+const CONTACTS_PER_HOUR = 5;
+const CONTACT_SERVICES = ["server", "moro", "custom", "other"];
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const cors = corsHeaders(request, env);
 
@@ -20,6 +23,7 @@ export default {
       if (url.pathname === "/auth/discord/callback" && request.method === "GET") return finishLogin(request, url, env);
       if (url.pathname === "/api/me" && request.method === "GET") return withCors(await me(request, env), cors);
       if (url.pathname === "/api/logout" && request.method === "POST") return withCors(await logout(request, env), cors);
+      if (url.pathname === "/api/contact" && request.method === "POST") return withCors(await contact(request, env, ctx), cors);
       return withCors(json({ error: "not_found" }, 404), cors);
     } catch (err) {
       console.error(JSON.stringify({ msg: "unhandled", path: url.pathname, error: String(err?.stack || err) }));
@@ -129,6 +133,62 @@ async function logout(request, env) {
   const token = bearer(request);
   if (token) await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?1").bind(await sha256(token)).run();
   return json({ ok: true });
+}
+
+async function contact(request, env, ctx) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: "bad_json" }, 400); }
+
+  // bots fill the hidden "website" field; pretend it worked
+  if (body.website) return json({ ok: true });
+
+  const field = (k, max) => String(body[k] ?? "").trim().slice(0, max);
+  const q = {
+    service: field("service", 20),
+    name: field("name", 80),
+    email: field("email", 120),
+    discord: field("discord", 60),
+    server: field("server", 120),
+    packetver: field("packetver", 40),
+    budget: field("budget", 40),
+    message: field("message", 2000),
+    source: field("source", 200),
+  };
+  if (!CONTACT_SERVICES.includes(q.service)) return json({ error: "invalid", field: "service" }, 400);
+  if (!q.name) return json({ error: "invalid", field: "name" }, 400);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q.email)) return json({ error: "invalid", field: "email" }, 400);
+  if (q.message.length < 10) return json({ error: "invalid", field: "message" }, 400);
+
+  const now = Date.now();
+  const ipHash = await sha256(request.headers.get("CF-Connecting-IP") || "unknown");
+  const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM contacts WHERE ip_hash = ?1 AND created_at > ?2")
+    .bind(ipHash, now - 36e5).first();
+  if (recent.n >= CONTACTS_PER_HOUR) return json({ error: "rate_limited" }, 429);
+
+  const row = await env.DB.prepare(
+    `INSERT INTO contacts (service, name, email, discord, server, packetver, budget, message, source, ip_hash, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id`
+  ).bind(q.service, q.name, q.email, q.discord || null, q.server || null, q.packetver || null,
+    q.budget || null, q.message, q.source || null, ipHash, now).first();
+
+  console.log(JSON.stringify({ msg: "contact", id: row.id, service: q.service }));
+  if (env.DISCORD_WEBHOOK_URL) ctx.waitUntil(notifyContact(env.DISCORD_WEBHOOK_URL, row.id, q));
+  return json({ ok: true, id: row.id });
+}
+
+async function notifyContact(webhook, id, q) {
+  const lines = [
+    `**New contact #${id}** · ${q.service}`,
+    `**${q.name}** · ${q.email}${q.discord ? ` · Discord: ${q.discord}` : ""}`,
+    [q.server && `Server: ${q.server}`, q.packetver && `Packet: ${q.packetver}`, q.budget && `Budget: ${q.budget}`].filter(Boolean).join(" · "),
+    q.message,
+  ].filter(Boolean);
+  const res = await fetch(webhook, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: lines.join("\n").slice(0, 1900), allowed_mentions: { parse: [] } }),
+  });
+  if (!res.ok) console.error(JSON.stringify({ msg: "contact_webhook_failed", id, status: res.status }));
 }
 
 async function currentUser(request, env) {

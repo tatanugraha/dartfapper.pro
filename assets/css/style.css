@@ -423,3 +423,62 @@ a.server-card:hover .server-link::before { width: 34px; }
   .hero-stats span { font-size: .75rem; display: block; line-height: 1.3; }
   .hero-cta .btn { flex: 1 1 100%; text-align: center; }
 }
+
+/*-----------------------------------*\
+  #KONTAK (contact/)
+\*-----------------------------------*/
+.contact-page { padding-top: 70px; min-height: calc(100vh - 70px); }
+.contact-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 28px; align-items: start; text-align: left; }
+.contact-form, .contact-card { background: var(--bg-surface); border: 1px solid var(--border-space-cadet); }
+.contact-form { display: grid; gap: 18px; padding: 32px; border-color: var(--glow-alpha-30); }
+.contact-services { border: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.contact-services legend { color: var(--text-white); font-weight: 600; margin-bottom: 10px; }
+.contact-services label { position: relative; cursor: pointer; }
+.contact-services input { position: absolute; opacity: 0; }
+.contact-services span { display: grid; place-items: center; height: 100%; min-height: 52px; padding: 8px 10px; text-align: center; font-weight: 600; font-size: .88rem; color: var(--text-muted); border: 1px solid var(--border-space-cadet); background: var(--bg-surface-2); transition: var(--transition-1); }
+.contact-services label:hover span { color: var(--text-white); }
+.contact-services input:checked + span { color: var(--cyan); border-color: var(--cyan); background: var(--glow-alpha-12); box-shadow: inset 0 -2px 0 var(--cyan); }
+.contact-services input:focus-visible + span { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.contact-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.field { display: grid; gap: 6px; font-weight: 600; font-size: .9rem; color: var(--text-white); }
+.field span { display: inline; }
+.field input, .field select, .field textarea {
+  width: 100%; font: 400 1rem var(--ff-work); color: var(--text-white);
+  background: var(--bg-deep); border: 1px solid var(--border-space-cadet); padding: 11px 12px; transition: var(--transition-1);
+}
+.field textarea { resize: vertical; min-height: 120px; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px var(--glow-alpha-12); }
+.field ::placeholder { color: hsl(215, 10%, 42%); }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.contact-error { color: #FF7A7A; background: hsla(0,100%,70%,.08); border: 1px solid hsla(0,100%,70%,.3); padding: 10px 14px; font-size: .92rem; }
+.contact-error[hidden] { display: none; }
+.contact-form .btn { justify-self: start; }
+.contact-form .btn:disabled { opacity: .6; cursor: wait; }
+.contact-note { font-size: .85rem; color: var(--text-muted); }
+.contact-aside { display: grid; gap: 16px; }
+.contact-card { padding: 24px; }
+.contact-card h2 { color: var(--text-white); font-size: 1.2rem; margin-bottom: 14px; }
+.contact-card .btn { margin-top: 10px; }
+.contact-offer { display: grid; gap: 14px; }
+.contact-offer li { padding-left: 16px; border-left: 2px solid var(--glow-alpha-30); }
+.contact-offer strong { display: block; color: var(--text-white); }
+.contact-offer span { display: block; font-family: var(--ff-work); font-size: .9rem; color: var(--text-muted); }
+.contact-offer a { display: inline-block; margin-top: 4px; font-weight: 700; font-size: .85rem; color: var(--cyan); }
+.contact-proof { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.contact-proof strong { display: block; font-size: 2.2rem; font-weight: 800; line-height: 1; color: var(--text-white); text-shadow: 0 0 18px hsla(195,100%,55%,.45); }
+.contact-proof span { font-size: .82rem; color: var(--text-muted); }
+.contact-thanks { text-align: center; padding-block: 60px; }
+.contact-thanks .hero-cta { margin-top: 8px; }
+.contact-page [data-reveal] { opacity: 1; transform: none; }
+@media (max-width: 900px) {
+  .contact-grid { grid-template-columns: 1fr; }
+  .contact-services { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .contact-form { padding: 22px 16px; }
+  .contact-row { grid-template-columns: 1fr; }
+  .contact-form .btn { justify-self: stretch; text-align: center; }
+}
+.service-cta { justify-content: flex-start; }
+.field.req > span:first-child::after { content: " *"; color: var(--cyan); }
+@media (max-width: 480px) { .contact-back { display: none; } }

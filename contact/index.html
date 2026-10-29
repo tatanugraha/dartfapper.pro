@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact · Ragnarok server setup & MoRo mobile client · dartfapper</title>
+  <meta name="description" content="Contact dartfapper about a Ragnarok Online private server: rAthena setup, custom NPCs and systems, client and patcher, web panel, or the MoRo Android client for your server.">
+  <meta property="og:title" content="Contact · dartfapper">
+  <meta property="og:description" content="Ragnarok server setup, custom systems, and the MoRo mobile client. Tell me about your server and I'll get back to you.">
+  <meta property="og:image" content="../assets/images/servers/newera.jpg">
+  <meta name="theme-color" content="#050608">
+  <link rel="icon" href="../assets/images/favicon.svg" type="image/svg+xml">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Work+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+
+<body>
+
+  <header class="header active" data-header>
+    <div class="container">
+      <a href="../" class="logo" aria-label="dartfapper home">
+        <img src="../assets/images/favicon.svg" width="36" height="36" alt="">
+        <span>dart<b>fapper</b></span>
+      </a>
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" data-lang-btn="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang-btn="id" aria-pressed="false">ID</button>
+        </div>
+        <a href="../" class="btn btn-ghost login-btn contact-back" data-i18n="contact.back">Back to site</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="contact-page">
+    <section class="section">
+      <div class="container">
+        <p class="section-subtitle" data-i18n="contact.kicker">Contact</p>
+        <h1 class="h1 section-title" data-i18n-html="contact.title">Tell me about <span class="span">your server</span></h1>
+        <p class="section-text" data-i18n="contact.text">Server setup, custom systems, or the MoRo mobile client. Fill in what you know; I'll reply by email or Discord, usually with a price and timeline.</p>
+
+        <div class="contact-grid">
+          <form class="contact-form" data-contact-form novalidate>
+            <fieldset class="contact-services">
+              <legend data-i18n="contact.f.service">What do you need?</legend>
+              <label><input type="radio" name="service" value="server" checked><span data-i18n="contact.s.server">Full server setup</span></label>
+              <label><input type="radio" name="service" value="moro"><span data-i18n="contact.s.moro">MoRo mobile client</span></label>
+              <label><input type="radio" name="service" value="custom"><span data-i18n="contact.s.custom">Custom NPCs & systems</span></label>
+              <label><input type="radio" name="service" value="other"><span data-i18n="contact.s.other">Something else</span></label>
+            </fieldset>
+
+            <div class="contact-row">
+              <label class="field req"><span data-i18n="contact.f.name">Your name</span>
+                <input name="name" required maxlength="80" autocomplete="name"></label>
+              <label class="field req"><span data-i18n="contact.f.email">Email</span>
+                <input name="email" type="email" required maxlength="120" autocomplete="email"></label>
+            </div>
+            <div class="contact-row">
+              <label class="field"><span data-i18n="contact.f.discord">Discord username</span>
+                <input name="discord" maxlength="60" autocomplete="off"></label>
+              <label class="field"><span data-i18n="contact.f.server">Server name or website</span>
+                <input name="server" maxlength="120"></label>
+            </div>
+            <div class="contact-row">
+              <label class="field"><span data-i18n="contact.f.packet">Client / packet version</span>
+                <input name="packetver" maxlength="40" data-i18n-ph="contact.f.packetPh" placeholder="e.g. 20200401, or not sure"></label>
+              <label class="field"><span data-i18n="contact.f.budget">Budget</span>
+                <select name="budget">
+                  <option value="" data-i18n="contact.b.unsure">Not sure yet</option>
+                  <option value="<$100">&lt; $100</option>
+                  <option value="$100-300">$100 – $300</option>
+                  <option value="$300-1000">$300 – $1,000</option>
+                  <option value="$1000+">$1,000+</option>
+                </select></label>
+            </div>
+            <label class="field req"><span data-i18n="contact.f.message">What should the server do?</span>
+              <textarea name="message" required minlength="10" maxlength="2000" rows="5" data-i18n-ph="contact.f.messagePh" placeholder="Renewal or pre-renewal, rates, features you want, when you want to launch…"></textarea></label>
+
+            <!-- left empty by people; bots fill it -->
+            <label class="hp" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
+
+            <p class="contact-error" data-contact-error role="alert" hidden></p>
+            <button class="btn btn-primary" type="submit" data-contact-submit data-i18n="contact.submit">Send message</button>
+            <p class="contact-note" data-i18n="contact.privacy">Your details are only used to reply to this message.</p>
+          </form>
+
+          <aside class="contact-aside">
+            <div class="contact-card">
+              <h2 data-i18n="contact.a.title">What you can order</h2>
+              <ul class="contact-offer">
+                <li><strong data-i18n="contact.s.server">Full server setup</strong><span data-i18n="contact.a.server">rAthena on a VPS, client, GRF & patcher, web panel for sign-ups and donations.</span></li>
+                <li><strong data-i18n="contact.s.moro">MoRo mobile client</strong><span data-i18n="contact.a.moro">Your server as a branded Android app. $300 one-time, first 12 months included.</span><a href="../moro/" data-i18n="contact.a.moroLink">See MoRo</a></li>
+                <li><strong data-i18n="contact.s.custom">Custom NPCs & systems</strong><span data-i18n="contact.a.custom">Events, gacha, battle pass, custom UI windows.</span></li>
+              </ul>
+            </div>
+            <div class="contact-card contact-proof">
+              <p><strong>5</strong><span data-i18n="contact.a.servers">RO servers built and online</span></p>
+              <p><strong>2</strong><span data-i18n="contact.a.moroCount">servers already on MoRo</span></p>
+            </div>
+            <div class="contact-card">
+              <p class="contact-note" data-i18n="contact.a.discordText">Prefer to chat first?</p>
+              <a href="#" class="btn btn-ghost" data-discord target="_blank" rel="noopener" data-i18n="cta.discord">Join Discord</a>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-bottom">
+      <div class="container">
+        <p class="copyright">&copy; <span data-year></span> dartfapper. <span data-i18n="footer.by">Made by Tata Nugraha.</span></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/i18n.js"></script>
+  <script src="../assets/js/contact.js"></script>
+</body>
+</html>
