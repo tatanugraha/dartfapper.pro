@@ -3,6 +3,8 @@
 const GAMES = window.GAMES || [];
 const SERVERS = window.SERVERS || [];
 const NEWS = window.NEWS || [];
+const NATIVE_UI = window.NATIVE_UI || [];
+const NATIVE_MORE = window.NATIVE_MORE || [];
 const DICT = window.I18N || { en: {} };
 
 const $ = (s, p = document) => p.querySelector(s);
@@ -109,6 +111,22 @@ function renderNews() {
   }).join("");
 }
 
+function renderNative() {
+  $("#native-grid").innerHTML = NATIVE_UI.map((n) => `
+    <li class="native-item${n.wide ? " is-wide" : ""}" data-reveal>
+      <a class="native-shot" href="${esc(n.image)}" target="_blank" rel="noopener" aria-label="${esc(tx(n.name))}: ${esc(ui("native.open"))}">
+        <img src="${esc(n.image)}" alt="${esc(tx(n.name))} window in OTTi RO" loading="lazy">
+      </a>
+      <div class="native-body">
+        <h3 class="native-name">${esc(tx(n.name))}</h3>
+        <p class="native-text">${esc(tx(n.text))}</p>
+      </div>
+    </li>`).join("");
+  $("#native-more").innerHTML = NATIVE_MORE.map((n) =>
+    `<li><strong>${esc(tx(n.name))}</strong><span>${esc(tx(n.text))}</span></li>`).join("");
+  if (!NATIVE_UI.length) $("#features").hidden = true;
+}
+
 function renderFooterServers() {
   const list = $("[data-footer-servers]");
   $$("li.gen", list).forEach((li) => li.remove());
@@ -136,6 +154,7 @@ function render() {
   applyStaticText();
   renderGames();
   renderServers();
+  renderNative();
   renderNews();
   renderFooterServers();
   observeReveal();

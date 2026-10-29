@@ -167,3 +167,86 @@ window.NEWS = [
     url: ""
   }
 ];
+
+// ---------------------------------------------------------------------
+//  NATIVE CUSTOM UI (OTTi RO, PC client) — real client windows, not overlays.
+//    wide: true spans the full row (big windows).
+// ---------------------------------------------------------------------
+window.NATIVE_UI = [
+  {
+    name: "Battlepass",
+    image: "assets/images/native/battlepass.jpg",
+    wide: true,
+    text: {
+      en: "Seasons with a free and a premium reward track. Daily quests and weekly MVP hunts count up live as players kill monsters, and rewards are claimed straight from the window.",
+      id: "Season dengan jalur hadiah free dan premium. Daily quest dan weekly MVP hunt nambah langsung tiap pemain bunuh monster, hadiah diklaim langsung dari window."
+    }
+  },
+  {
+    name: "Card Collector",
+    image: "assets/images/native/cardcollector.jpg",
+    wide: true,
+    text: {
+      en: "An album of every card in the game. Players deposit cards, complete sets for permanent bonuses, and search or filter by set, owned cards, or their own album.",
+      id: "Album semua kartu di game. Pemain setor kartu, lengkapi set buat bonus permanen, dan cari atau filter per set, kartu yang dimiliki, atau album sendiri."
+    }
+  },
+  {
+    name: "Auto Potion",
+    image: "assets/images/native/autopotion.jpg",
+    text: {
+      en: "Drag a potion from the inventory and set an HP or SP threshold. It drinks automatically, pauses when the stack runs out and resumes on restock. Faster check rates can be VIP-only.",
+      id: "Drag potion dari inventory dan atur batas HP atau SP. Diminum otomatis, berhenti kalau habis dan lanjut lagi pas restock. Kecepatan cek tercepat bisa khusus VIP."
+    }
+  },
+  {
+    name: "Auto Skill",
+    image: "assets/images/native/autoskill.jpg",
+    text: {
+      en: "Keeps support buffs up by recasting them the moment they run out. Drag a skill from the skill list into a slot; one slot is free, three more unlock with VIP.",
+      id: "Jaga buff tetap aktif, di-cast ulang begitu habis. Drag skill dari skill list ke slot; satu slot gratis, tiga lagi kebuka buat VIP."
+    }
+  },
+  {
+    name: { en: "Gear tab (10 extra slots)", id: "Tab Gear (10 slot tambahan)" },
+    image: "assets/images/native/gear.jpg",
+    text: {
+      en: "A new tab inside the Equip window: Outfit, Aura, Footprint, Effect, Name, Chat and four Skill slots that change how a player's skills look to everyone.",
+      id: "Tab baru di window Equip: Outfit, Aura, Footprint, Effect, Name, Chat, dan empat slot Skill yang ngubah tampilan skill pemain di mata semua orang."
+    }
+  },
+  {
+    name: "Graymap",
+    image: "assets/images/native/graymap.jpg",
+    text: {
+      en: "Draws the map as flat coloured cells so walkable ground, walls, water and shootable walls are easy to read in PvP and WoE. Every colour is adjustable; the LGP tab shows ground-skill cells.",
+      id: "Gambar map jadi kotak warna polos, jadi tanah jalan, tembok, air, dan tembok tembak gampang kebaca waktu PvP dan WoE. Semua warna bisa diatur; tab LGP nampilin cell skill tanah."
+    }
+  },
+  {
+    name: "Stylist",
+    image: "assets/images/native/stylist.jpg",
+    text: {
+      en: "The built-in stylist, fixed: numbered hairstyle and hair-colour pickers and an outfit tab that works for every job.",
+      id: "Stylist bawaan yang sudah diperbaiki: pilihan gaya dan warna rambut bernomor, plus tab outfit yang jalan di semua job."
+    }
+  },
+  {
+    name: "Voice chat",
+    image: "assets/images/native/voice.jpg",
+    text: {
+      en: "In-game voice with push-to-talk or open mic, a rebindable talk key, per-player volume and device choice. PC and MoRo mobile players talk to each other.",
+      id: "Voice di dalam game: push-to-talk atau open mic, tombol bicara bisa diganti, volume per pemain, dan pilihan device. Pemain PC dan MoRo mobile bisa ngobrol bareng."
+    }
+  }
+];
+
+// Built and running, no screenshot on the page yet.
+window.NATIVE_MORE = [
+  { name: "Attendance", text: { en: "7-day reward rows plus a VIP daily page", id: "Hadiah login 7 hari per baris plus halaman VIP harian" } },
+  { name: "Auto Hunt", text: { en: "Seven-tab auto hunt setup, if the server allows it", id: "Setup auto hunt 7 tab, kalau server ngizinin" } },
+  { name: { en: "Profile & Social", id: "Profil & Social" }, text: { en: "Player profiles with bio and custom VIP/GM backgrounds", id: "Profil pemain dengan bio dan latar custom VIP/GM" } },
+  { name: { en: "Nick colours & rank emblems", id: "Warna nick & emblem rank" }, text: { en: "Coloured names and chat bubbles, rank badges", id: "Nama dan balon chat berwarna, badge rank" } },
+  { name: { en: "Skill visuals", id: "Visual skill" }, text: { en: "Per-player skill effects from the Skill gear slots", id: "Efek skill per pemain dari slot gear Skill" } },
+  { name: { en: "GO menu", id: "Menu GO" }, text: { en: "One button next to the cash shop that opens every custom window", id: "Satu tombol di samping cash shop buat buka semua window custom" } }
+];
