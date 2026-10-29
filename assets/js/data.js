@@ -129,18 +129,6 @@ window.SERVERS = [
     players: "", // TODO
     url: "https://lepakro.com/",
     image: "assets/images/servers/lepak.jpg"
-  },
-  {
-    name: "MoRo · Mobile RO",
-    kind: "client",
-    type: { en: "Android client", id: "Client Android" },
-    version: { en: "Packet 2003–2025 · first live on OTTi RO", id: "Packet 2003–2025 · live pertama di OTTi RO" },
-    status: "online",
-    since: { en: "October 2026", id: "Oktober 2026" },
-    players: "",
-    url: "", // public page/download link if there is one
-    cta: { en: "Mobile client for your server · ask on Discord", id: "Client mobile buat server lo · tanya di Discord" },
-    image: "assets/images/servers/moro.jpg"
   }
 ];
 

@@ -129,7 +129,6 @@ function applyStaticText() {
   const servers = SERVERS.filter((s) => s.kind !== "client");
   $$("[data-stat='servers']").forEach((el) => (el.textContent = servers.length));
   $$("[data-stat='online']").forEach((el) => (el.textContent = servers.filter((s) => s.status === "online").length));
-  $$("[data-stat='clients']").forEach((el) => (el.textContent = SERVERS.length - servers.length));
   toggler.setAttribute("aria-label", ui(navbar.classList.contains("active") ? "menu.close" : "menu.open"));
 }
 
