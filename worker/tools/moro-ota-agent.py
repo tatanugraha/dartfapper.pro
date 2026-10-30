@@ -4,7 +4,8 @@ and runs the actions the console may ask for: promote (canary -> production) and
 
 Runs on the host that serves the app's OTA files, once a minute from cron. Promote reuses the Remote class of
 MobileRO's tools/ota-remote-linux.py (the same checks ota-admin.ps1 uses: canary checksums verified, production
-snapshotted to web-releases first); if a promote fails half way the snapshot is copied back. Nothing is signed here:
+snapshotted to web-releases first); if a promote fails half way the snapshot is copied back. Bundle files
+(release.json included) are listed in the signed manifest, so they are only ever copied, never rewritten. Nothing is signed here:
 rollback only applies the rollback publish-web.ps1 signed on the PC for the live bundle (<mobile dir>/web-rollback/
 <production version>/: the old manifest re-signed as the next version + from.txt naming the kept bundle). The
 server's Mobile RO ingest key is read from KEY_FILE.
@@ -33,18 +34,6 @@ def channel(remote, folder):
         release = {}
     return {'version': version, 'tag': release.get('tag'), 'commit': release.get('commit'),
             'builtAt': release.get('builtAt'), 'dirty': release.get('dirty') is True}
-
-def carry_release(source, root, **extra):
-    # release.json is not part of the signed bundle; carry it over so the console shows what production now serves.
-    try:
-        release = json.load(open(os.path.join(source, 'release.json'), encoding='utf-8'))
-        release.update(channel='production', **extra)
-        temporary = os.path.join(root, 'web', 'release.json.pending')
-        with open(temporary, 'w', encoding='utf-8') as f:
-            json.dump(release, f, indent=2)
-        os.replace(temporary, os.path.join(root, 'web', 'release.json'))
-    except (OSError, ValueError):
-        pass
 
 def unsigned(text):
     # manifest lines that name the files, without version and signature: what a rollback must match
@@ -83,7 +72,6 @@ def promote(remote, root):
         if active is not None and os.path.isdir(kept):
             remote.copy(kept, remote.entries(kept), True)
         raise
-    carry_release(canary, root)
     return 'promoted version %d' % version
 
 def rollback(remote, root):
@@ -103,7 +91,6 @@ def rollback(remote, root):
     with open(temporary, 'w', encoding='utf-8') as f:
         f.write(signed)
     os.replace(temporary, os.path.join(root, 'web', remote.manifest))
-    carry_release(kept, root, rollbackOf=active)
     return 'rolled back to version %d (served as %d)' % (source, active + 1)
 
 def post(key, body):
