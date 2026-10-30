@@ -214,17 +214,35 @@ async function moroActivity(request,env,key){
   ]);
   return json({ok:true},200,cors);
 }
+// Game server → Worker: who is online from the MoRo app right now, read by the server itself (login.client_platform =
+// 'mobile', the flag Odin uses to skip phones). Each report replaces the previous snapshot for that server.
+const moroOnlineSql="CREATE TABLE IF NOT EXISTS moro_online (server_id TEXT NOT NULL, char_id INTEGER NOT NULL, account_id INTEGER NOT NULL, userid TEXT NOT NULL DEFAULT '', char_name TEXT NOT NULL DEFAULT '', base_level INTEGER NOT NULL DEFAULT 0, ip TEXT NOT NULL DEFAULT '', reported_at INTEGER NOT NULL, PRIMARY KEY (server_id, char_id))";
+let moroOnlineReady=false;
+async function ensureMoroOnline(env){if(!moroOnlineReady){await env.DB.prepare(moroOnlineSql).run();moroOnlineReady=true;}}
+async function moroServerReport(env,server,data){
+  if(!Array.isArray(data?.players)||data.players.length>1000)return json({error:'invalid_request'},400);
+  const line=(value,max)=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,'').slice(0,max):'';
+  const id=value=>Number.isSafeInteger(value)&&value>0&&value<2**31?value:null;
+  const ip=value=>typeof value==='string'&&/^[0-9a-fA-F:.]{2,45}$/.test(value)?value:'';
+  const rows=[];for(const p of data.players){const charId=id(p?.charId),accountId=id(p?.accountId);if(!charId||!accountId)return json({error:'invalid_request'},400);
+    rows.push([charId,accountId,line(p.userid,23),line(p.name,24),Number.isSafeInteger(p.level)&&p.level>=0&&p.level<10000?p.level:0,ip(p.ip)]);}
+  await ensureMoroOnline(env);const now=Date.now();
+  await env.DB.batch([env.DB.prepare('DELETE FROM moro_online WHERE server_id=?').bind(server.id),
+    ...rows.map(r=>env.DB.prepare('INSERT OR REPLACE INTO moro_online (server_id,char_id,account_id,userid,char_name,base_level,ip,reported_at) VALUES (?,?,?,?,?,?,?,?)').bind(server.id,...r,now))]);
+  return json({ok:true,players:rows.length});
+}
 // Mobile RO app → Worker. Bearer ingest key per server; data is client-reported, like Kafra Guard module reports.
 async function ingest(request,env,path){
   if(path.startsWith('/api/ingest/moro/activity/'))return moroActivity(request,env,path.slice('/api/ingest/moro/activity/'.length));
-  const kind=path==='/api/ingest/moro/crash'?'crash':path==='/api/ingest/moro/heartbeat'?'heartbeat':null;if(!kind)return json({error:'not_found'},404);
+  const kind=path==='/api/ingest/moro/crash'?'crash':path==='/api/ingest/moro/heartbeat'?'heartbeat':path==='/api/ingest/moro/online'?'online':null;if(!kind)return json({error:'not_found'},404);
   const auth=request.headers.get('Authorization')??'',key=auth.startsWith('Bearer ')?auth.slice(7):'';
   if(!/^[A-Za-z0-9_-]{43}$/.test(key))return json({error:'unauthorized'},401);
   const server=await env.DB.prepare('SELECT id FROM kafra_servers WHERE moro=1 AND moro_key_hash=?').bind(await sha(key)).first();
   if(!server)return json({error:'unauthorized'},401);
   const minute=Math.floor(Date.now()/60000);
-  if(await bump(env,await sha('ingest|'+kind+'|'+server.id+'|'+minute),(minute+1)*60000)>(kind==='crash'?60:1200))return json({error:'rate_limited'},429,{'Retry-After':'60'});
-  let data;try{data=await body(request,kind==='crash'?16384:1024);}catch{return json({error:'invalid_request'},400);}
+  if(await bump(env,await sha('ingest|'+kind+'|'+server.id+'|'+minute),(minute+1)*60000)>({crash:60,online:20}[kind]??1200))return json({error:'rate_limited'},429,{'Retry-After':'60'});
+  let data;try{data=await body(request,{crash:16384,online:196608}[kind]??1024);}catch{return json({error:'invalid_request'},400);}
+  if(kind==='online')return moroServerReport(env,server,data);
   const version=text(data.appVersion,32),os=text(data.os,32),now=Date.now();if(!version||!os)return json({error:'invalid_request'},400);
   if(kind==='heartbeat'){
     const device=text(data.deviceId,128);if(!device)return json({error:'invalid_request'},400);
@@ -244,18 +262,20 @@ async function moroDashboard(user,id,env){
   const row=await serverRow(user,id,env);if(!row?.moro)return json({error:'server_not_found'},404);
   const now=Date.now(),q=(sql,...args)=>env.DB.prepare(sql).bind(id,...args);
   await q('DELETE FROM moro_devices WHERE server_id=? AND last_seen<?',now-30*day).run();
-  const [builds,online,active,versions,crashes,recent,players]=await Promise.all([
+  const [builds,online,active,versions,crashes,recent,inGame,players]=await Promise.all([
     q('SELECT id,version,url,notes,created_at FROM moro_builds WHERE server_id=? ORDER BY created_at DESC LIMIT 20').all(),
     q('SELECT COUNT(*) AS n FROM moro_devices WHERE server_id=? AND last_seen>?',now-5*60000).first(),
     q('SELECT COUNT(*) AS n FROM moro_devices WHERE server_id=? AND last_seen>?',now-day).first(),
     q('SELECT app_version AS version,COUNT(*) AS devices FROM moro_devices WHERE server_id=? AND last_seen>? GROUP BY app_version ORDER BY devices DESC LIMIT 20',now-day).all(),
     q('SELECT COUNT(*) AS n FROM moro_crashes WHERE server_id=? AND created_at>?',now-day).first(),
     q('SELECT id,app_version,os,model,message,stack,created_at FROM moro_crashes WHERE server_id=? ORDER BY id DESC LIMIT 50').all(),
+    ensureMoroOnline(env).then(()=>q('SELECT char_id,account_id,userid,char_name,base_level,ip,reported_at FROM moro_online WHERE server_id=? AND reported_at>? ORDER BY char_name LIMIT 500',now-3*60000).all()),
     ensureMoroPlayers(env).then(()=>q("SELECT account_id,char_id,char_name,device,os,app_version,last_seen FROM moro_players WHERE server_id=? AND last_seen>? ORDER BY char_name='',char_name LIMIT 200",now-3*60000).all())
   ]);
   return json({server:{id,name:row.name},license:{plan:row.moro_plan,expiresAt:row.moro_expires,active:!row.moro_expires||row.moro_expires>now},
     builds:builds.results.map(b=>({id:b.id,version:b.version,url:b.url,notes:b.notes,publishedAt:b.created_at})),
-    stats:{online:online.n,devices24h:active.n,crashes24h:crashes.n,versions:versions.results},
+    inGame:inGame.results.map(p=>({charId:p.char_id,accountId:p.account_id,userid:p.userid,name:p.char_name,level:p.base_level,ip:p.ip,reportedAt:p.reported_at})),
+    stats:{online:Math.max(online.n,inGame.results.length),devices24h:active.n,crashes24h:crashes.n,versions:versions.results},
     players:players.results.map(p=>({accountId:p.account_id,charId:p.char_id,name:p.char_name,device:p.device,os:p.os,appVersion:p.app_version,lastSeen:p.last_seen})),
     crashes:recent.results.map(c=>({id:c.id,appVersion:c.app_version,os:c.os,model:c.model,message:c.message,stack:c.stack,at:c.created_at})),updatedAt:now});
 }

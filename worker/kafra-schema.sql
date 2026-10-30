@@ -90,3 +90,5 @@ CREATE TABLE IF NOT EXISTS kafra_members (
 );
 -- MoRo player activity (one row per app start); the Worker also creates it on first use.
 CREATE TABLE IF NOT EXISTS moro_players (server_id TEXT NOT NULL, sid TEXT NOT NULL, account_id INTEGER NOT NULL DEFAULT 0, char_id INTEGER NOT NULL DEFAULT 0, char_name TEXT NOT NULL DEFAULT '', device TEXT NOT NULL DEFAULT '', os TEXT NOT NULL DEFAULT '', app_version TEXT NOT NULL DEFAULT '', last_seen INTEGER NOT NULL, PRIMARY KEY (server_id, sid));
+-- Mobile players online as reported by the game server itself (login.client_platform = 'mobile'); snapshot per server.
+CREATE TABLE IF NOT EXISTS moro_online (server_id TEXT NOT NULL, char_id INTEGER NOT NULL, account_id INTEGER NOT NULL, userid TEXT NOT NULL DEFAULT '', char_name TEXT NOT NULL DEFAULT '', base_level INTEGER NOT NULL DEFAULT 0, ip TEXT NOT NULL DEFAULT '', reported_at INTEGER NOT NULL, PRIMARY KEY (server_id, char_id));

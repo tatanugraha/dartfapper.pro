@@ -232,3 +232,17 @@ test('MoRo activity pings (text/plain, key in path) show the character in play o
   assert.equal((await ping(key,{...base,ev:'end'})).status,200);
   data=await (await adminApi(request('moro',undefined,owner),env)).json();assert.deepEqual(data.players.map(p=>p.name),['']);
 });
+test('game server report of mobile players (account, character, IP) replaces the snapshot on the owner dashboard',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
+  const key=(await (await adminApi(request('admin/servers/moro',{id:own,enabled:true,plan:'Standard',expiresAt:'2099-12-31'},admin),env)).json()).ingestKey;
+  const report=(k,data)=>adminApi(new Request('https://guard.example.test/api/ingest/moro/online',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+k},body:JSON.stringify(data)}),env);
+  const me={charId:150020,accountId:2000005,userid:'saishijuho',name:'testermaster',level:99,ip:'103.121.17.28'};
+  assert.equal((await report(key,{players:[me,{...me,charId:150021,accountId:2000006,userid:'other',name:'Alt',ip:'10.0.0.1'}]})).status,200);
+  let data=await (await adminApi(request('moro',undefined,owner),env)).json();
+  assert.deepEqual(data.inGame.map(p=>[p.name,p.userid,p.ip]),[['Alt','other','10.0.0.1'],['testermaster','saishijuho','103.121.17.28']]);assert.equal(data.stats.online,2);
+  assert.equal((await report(key,{players:[me]})).status,200);
+  data=await (await adminApi(request('moro',undefined,owner),env)).json();assert.deepEqual(data.inGame.map(p=>p.name),['testermaster']);
+  assert.equal((await report('x'.repeat(43),{players:[]})).status,401);
+  for(const bad of [{players:'x'},{players:[{...me,charId:-1}]},{players:[{...me,accountId:'1'}]}])assert.equal((await report(key,bad)).status,400,JSON.stringify(bad));
+  assert.equal((await report(key,{players:[{...me,ip:'<script>'}]})).status,200);
+  assert.equal((await (await adminApi(request('moro',undefined,owner),env)).json()).inGame[0].ip,'');
+});

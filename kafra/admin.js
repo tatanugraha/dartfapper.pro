@@ -188,9 +188,15 @@ async function loadMoro(){
     const builds=$('moro-builds');if(!data.builds.length)empty(builds,'No builds published yet.',4);else builds.replaceChildren();
     data.builds.forEach((b,i)=>{const row=document.createElement('tr');const v=cell(row,b.version,true);if(i===0){const tag=document.createElement('span');tag.className='badge';tag.textContent='Latest';v.append(' ',tag);}
       cell(row,date(b.publishedAt));cell(row,b.notes??'—').className='notes';link(row,b.url,'Download APK →');builds.append(row);});
-    const players=$('moro-players');if(!data.players?.length)empty(players,'No app is open right now.',5);else players.replaceChildren();
-    for(const p of data.players??[]){const row=document.createElement('tr');cell(row,p.name||'Not in game (launcher / login)');cell(row,p.accountId?String(p.accountId):'—');
-      cell(row,[p.device,p.os].filter(Boolean).join(' · ')||'—');cell(row,p.appVersion,true);cell(row,time(p.lastSeen));players.append(row);}
+    // Game server report (account, character, IP) first; app-only pings (launcher / login screen) after it.
+    const players=$('moro-players'),apps=data.players??[],inGame=data.inGame??[];players.replaceChildren();
+    if(!inGame.length&&!apps.length)empty(players,'No mobile player is online right now.',5);
+    for(const p of inGame){const row=document.createElement('tr');const app=apps.find(a=>a.accountId===p.accountId);
+      cell(row,p.name+(p.level?' (Lv '+p.level+')':''));const account=cell(row,p.userid||String(p.accountId));account.title='Account ID '+p.accountId;
+      cell(row,p.ip||'—',true);cell(row,app?[app.device,app.os].filter(Boolean).join(' · '):'MoRo app');cell(row,time(p.reportedAt));players.append(row);}
+    for(const p of apps.filter(a=>!inGame.some(g=>g.accountId===a.accountId&&a.accountId))){const row=document.createElement('tr');
+      cell(row,p.name||'Not in game (launcher / login)');cell(row,p.accountId?String(p.accountId):'—');cell(row,'—');
+      cell(row,[p.device,p.os].filter(Boolean).join(' · ')||'—');cell(row,time(p.lastSeen));players.append(row);}
     const versions=$('moro-versions');if(!data.stats.versions.length)empty(versions,'No devices have reported in the last 24 hours.',2);else versions.replaceChildren();
     for(const v of data.stats.versions){const row=document.createElement('tr');cell(row,v.version,true);cell(row,String(v.devices));versions.append(row);}
     const crashes=$('moro-crash-list');if(!data.crashes.length)empty(crashes,'No crashes reported.',4);else crashes.replaceChildren();
