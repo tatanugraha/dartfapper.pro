@@ -171,3 +171,14 @@ test('kick, ban and unban go to the owner gate only, with validated input',async
   assert.equal((await adminApi(request('kick?server='+own,undefined,owner),env)).status,404);
   assert.equal(seen.length,before);
 });
+test('The env gate (KAFRA_GATE_URL) is listed as a real server and uses KAFRA_GATE_KEY',async t=>{const base=await fixture(t),env={...base,KAFRA_GATE_NAME:'Ragna Next',KAFRA_GATE_URL:'https://gate.ragna.test:8443/',KAFRA_GATE_KEY:gateKey},admin=await login(env);
+  const {servers}=await (await adminApi(request('admin/servers',undefined,admin),env)).json();
+  assert.equal(servers.length,1);assert.equal(servers[0].name,'Ragna Next');assert.equal(servers[0].builtIn,true);
+  await adminApi(request('admin/servers',undefined,admin),env);assert.equal((await env.DB.prepare('SELECT count(*) n FROM kafra_servers').first()).n,1);
+  const me=await (await adminApi(request('me',undefined,admin),env)).json();assert.deepEqual(me.servers.map(s=>s.id),[servers[0].id]);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});let seen;
+  globalThis.fetch=async(url,init)=>{seen={url:String(url),auth:init.headers.Authorization};return new Response(JSON.stringify({total:0,offset:0,sessions:[]}));};
+  for(const server of [servers[0].id,'default']){assert.equal((await adminApi(request('sessions?server='+server,undefined,admin),env)).status,200);
+    assert.equal(seen.url,'https://gate.ragna.test:8443/internal/owner/sessions?offset=0');assert.equal(seen.auth,'Bearer '+gateKey);}
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:servers[0].id,enabled:true,gateUrl:'https://gate.ragna.test:8443/'},admin),env)).status,200);
+});

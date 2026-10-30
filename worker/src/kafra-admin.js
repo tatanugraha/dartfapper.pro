@@ -149,11 +149,20 @@ function gateUrl(value,env){
 }
 function httpsUrl(value){let url;try{url=new URL(value);}catch{return null;}return url.protocol==='https:'&&!url.username&&!url.password&&value.length<=500?url.href:null;}
 const product=row=>({id:row.id,name:row.name,kafra:!!row.kafra,moro:!!row.moro});
-// The env-configured gate is the Super Admin's own server (Ragna Next); it is always listed, and says so until its gate is configured.
+// The env-configured gate (KAFRA_GATE_URL, e.g. Ragna Next) becomes a normal server row on first use, so it can be managed,
+// get owners and Mobile RO like any other. Its gate key stays in the Worker secret KAFRA_GATE_KEY unless one is saved in Manage.
+const envGate=env=>{const gate=env.KAFRA_GATE_URL?gateUrl(env.KAFRA_GATE_URL,env):null;return gate?gate.origin+'/':null;};
+async function ensureEnvServer(env){
+  const url=envGate(env);if(!url)return;
+  if(await env.DB.prepare('SELECT id FROM kafra_servers WHERE gate_url=?').bind(url).first())return;
+  const id=(await sha('env-gate|'+url)).slice(0,16);
+  await env.DB.prepare('INSERT OR IGNORE INTO kafra_servers (id,name,kafra,gate_url,created_at) VALUES (?,?,1,?,?)').bind(id,(env.KAFRA_GATE_NAME||'Main server').slice(0,60),url,Date.now()).run();
+}
 async function visibleServers(user,env){
   if(user.role==='member')return [];
   if(user.role==='server_owner')return (await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers WHERE id=?').bind(user.serverId).all()).results.map(product);
-  return [{id:'default',name:env.KAFRA_GATE_NAME||'Main server',kafra:true,moro:false},...(await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers ORDER BY name').all()).results.map(product)];
+  await ensureEnvServer(env);
+  return [...(await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers ORDER BY name').all()).results.map(product)];
 }
 async function serverRow(user,id,env){
   if(!serverId.test(id??'')||(user.role!=='super_admin'&&user.serverId!==id))return null;
@@ -161,9 +170,10 @@ async function serverRow(user,id,env){
 }
 // null = not visible to this user (or Kafra Guard not enabled); {} = visible but gate not configured.
 async function gateFor(user,id,env){
-  if(id==='default'){if(user.role!=='super_admin')return null;return env.KAFRA_GATE_URL&&env.KAFRA_GATE_KEY?{url:env.KAFRA_GATE_URL,key:env.KAFRA_GATE_KEY}:{};}
+  if(id==='default'){if(user.role!=='super_admin')return null;if(!envGate(env))return {};await ensureEnvServer(env);id=(await env.DB.prepare('SELECT id FROM kafra_servers WHERE gate_url=?').bind(envGate(env)).first())?.id;}
   const row=await serverRow(user,id,env);if(!row?.kafra)return null;
-  return row.gate_url&&row.gate_key?{url:row.gate_url,key:await unseal(env,row.gate_key,id)}:{};
+  if(row.gate_url&&row.gate_key)return {url:row.gate_url,key:await unseal(env,row.gate_key,id)};
+  return row.gate_url&&row.gate_url===envGate(env)&&env.KAFRA_GATE_KEY?{url:row.gate_url,key:env.KAFRA_GATE_KEY}:{};
 }
 // Mobile RO app → Worker. Bearer ingest key per server; data is client-reported, like Kafra Guard module reports.
 async function ingest(request,env,path){
@@ -209,9 +219,10 @@ async function moroDashboard(user,id,env){
 }
 async function adminRoutes(request,env,path){
   if(path==='/api/admin/servers'&&request.method==='GET'){
+    await ensureEnvServer(env);
     const servers=(await env.DB.prepare('SELECT id,name,kafra,gate_url,moro,moro_plan,moro_expires,moro_key_hash,created_at FROM kafra_servers ORDER BY name').all()).results;
     const owners=(await env.DB.prepare('SELECT username,server_id,created_at FROM kafra_owners ORDER BY username').all()).results;
-    return json({servers:servers.map(s=>({...product(s),gateUrl:s.gate_url,moroPlan:s.moro_plan,moroExpires:s.moro_expires,moroKey:!!s.moro_key_hash,createdAt:s.created_at,
+    return json({servers:servers.map(s=>({...product(s),gateUrl:s.gate_url,builtIn:!!s.gate_url&&s.gate_url===envGate(env),moroPlan:s.moro_plan,moroExpires:s.moro_expires,moroKey:!!s.moro_key_hash,createdAt:s.created_at,
       owners:owners.filter(o=>o.server_id===s.id).map(o=>({username:o.username,createdAt:o.created_at}))}))});
   }
   if(request.method!=='POST')return json({error:'not_found'},404);
@@ -228,7 +239,7 @@ async function adminRoutes(request,env,path){
     if(data.enabled!==true){await env.DB.prepare('UPDATE kafra_servers SET kafra=0 WHERE id=?').bind(row.id).run();return json({ok:true});}
     const gate=typeof data.gateUrl==='string'?gateUrl(data.gateUrl.trim(),env):null;if(!gate)return json({error:'invalid_gate_url'},400);
     const key=typeof data.gateKey==='string'?data.gateKey.trim().toLowerCase():'';
-    if(key?!/^[a-f0-9]{64}$/.test(key):!row.gate_key)return json({error:'invalid_gate_key'},400);
+    if(key?!/^[a-f0-9]{64}$/.test(key):!row.gate_key&&!(gate.origin+'/'===envGate(env)&&env.KAFRA_GATE_KEY))return json({error:'invalid_gate_key'},400);
     let sealed=row.gate_key;if(key){try{sealed=await seal(env,key,row.id);}catch{return json({error:'data_key_not_configured'},503);}}
     await env.DB.prepare('UPDATE kafra_servers SET kafra=1,gate_url=?,gate_key=? WHERE id=?').bind(gate.origin+'/',sealed,row.id).run();
     return json({ok:true});
