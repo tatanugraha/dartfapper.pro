@@ -61,11 +61,18 @@ function link(row,href,label){const td=document.createElement('td'),a=document.c
 function empty(tbody,text,columns){tbody.replaceChildren();const row=document.createElement('tr'),td=document.createElement('td');td.colSpan=columns;td.className='empty';td.textContent=text;row.append(td);tbody.append(row);}
 function render(){
   const tbody=$('sessions');tbody.replaceChildren();const query=$('search').value.trim().toLowerCase();
-  const rows=state.sessions.filter(s=>(s.deviceId+' '+s.ip).toLowerCase().includes(query));
-  if(!rows.length)empty(tbody,query?'No matches on this page.':'No verified clients are active.',6);
+  const rows=state.sessions.filter(s=>[s.deviceId,s.ip,s.account?.userid,s.account?.character?.name].join(' ').toLowerCase().includes(query));
+  if(!rows.length)empty(tbody,query?'No matches on this page.':'No verified clients are active.',7);
   for(const session of rows){const row=document.createElement('tr');const device=cell(row,session.deviceId.slice(0,16)+'…',true);device.title=session.deviceId;
+    // Account linked by the login server (matched on the client's network); character only while one is online.
+    const account=session.account,player=cell(row,account?account.userid+(account.character?' · '+account.character.name+' (Lv '+account.character.level+')':' · at character select'):'Not logged in');
+    if(account)player.title='Account ID '+account.accountId+(account.character?', character '+account.character.name:'');
     cell(row,session.ip);const build=cell(row,session.buildHash.slice(0,12)+'…',true);build.title=session.buildHash;
-    cell(row,session.moduleCount===null?'Awaiting report':session.moduleCount+' modules');cell(row,time(session.lastSeen));
+    const count=cell(row,session.moduleCount===null?'Awaiting report':session.moduleCount+' modules');
+    // Known third-party tools (Cheat Engine, XKore, WPE…) flagged by the gate from the module report.
+    if(session.flags?.length){row.className='flagged';const badge=document.createElement('span');badge.className='badge alert';
+      badge.textContent='⚠ '+[...new Set(session.flags.map(f=>f.tool))].join(', ');badge.title=session.flags.map(f=>f.name).join(', ');count.append(badge);}
+    cell(row,time(session.lastSeen));
     const action=document.createElement('td'),button=document.createElement('button');button.className='quiet';button.textContent='View modules →';button.addEventListener('click',()=>modules(session));
     const kick=document.createElement('button');kick.className='quiet danger';kick.textContent='Kick';kick.title='End this session; the game closes on its next heartbeat';
     kick.addEventListener('click',()=>guardAction('Kick this client ('+session.ip+')? The game closes within about 30 seconds.',()=>post('kick',{server,id:session.id}),'Client kicked.'));
@@ -76,11 +83,25 @@ function render(){
   $('page-info').textContent=state.total?'Showing '+(state.offset+1)+'–'+Math.min(state.offset+state.sessions.length,state.total)+' of '+state.total+' sessions':'0 active sessions';
   $('previous').disabled=state.offset===0;$('next').disabled=state.offset+50>=state.total;
 }
+// Alert on clients with known cheat modules: message bar, tab title, and a desktop notification once per session.
+const notified=new Set();
+function alertFlags(sessions){
+  const flagged=sessions.filter(s=>s.flags?.length);
+  document.title=(flagged.length?'(⚠ '+flagged.length+') ':'')+document.title.replace(/^\(⚠ \d+\) /,'');
+  if(!flagged.length)return;
+  const tools=[...new Set(flagged.flatMap(s=>s.flags.map(f=>f.tool)))].join(', ');
+  $('message').textContent='⚠ '+flagged.length+(flagged.length===1?' client has':' clients have')+' a known cheat tool loaded ('+tools+'). Check the red rows, then Kick or Ban.';
+  if(!('Notification' in window))return;
+  if(Notification.permission==='default'){Notification.requestPermission().catch(()=>{});return;}
+  if(Notification.permission!=='granted')return;
+  for(const s of flagged)if(!notified.has(s.id)){notified.add(s.id);
+    new Notification('Kafra Guard: cheat tool detected',{body:(s.account?.character?.name??s.account?.userid??s.ip)+' · '+[...new Set(s.flags.map(f=>f.tool))].join(', '),tag:'kafra-'+s.id});}
+}
 async function load(){
-  if(!server){$('message').textContent='No server has Kafra Guard enabled.';empty($('sessions'),'No server.',6);return;}
+  if(!server){$('message').textContent='No server has Kafra Guard enabled.';empty($('sessions'),'No server.',7);return;}
   $('refresh').disabled=true;
-  try{const data=await api('sessions?server='+encodeURIComponent(server)+'&offset='+state.offset);state={...state,...data};$('total').textContent=data.total;$('reported').textContent=data.sessions.filter(s=>s.moduleCount!==null).length;$('updated').textContent=time(data.updatedAt);$('message').textContent='';render();}
-  catch(error){state={sessions:[],offset:state.offset,total:0};$('message').textContent=error.message;$('total').textContent='—';$('reported').textContent='—';$('updated').textContent='—';empty($('sessions'),'Data unavailable. The panel never shows sample data.',6);}
+  try{const data=await api('sessions?server='+encodeURIComponent(server)+'&offset='+state.offset);state={...state,...data};$('total').textContent=data.total;$('reported').textContent=data.sessions.filter(s=>s.moduleCount!==null).length;$('updated').textContent=time(data.updatedAt);$('message').textContent='';render();alertFlags(data.sessions);}
+  catch(error){state={sessions:[],offset:state.offset,total:0};$('message').textContent=error.message;$('total').textContent='—';$('reported').textContent='—';$('updated').textContent='—';empty($('sessions'),'Data unavailable. The panel never shows sample data.',7);}
   finally{$('refresh').disabled=false;}
   loadBans();
 }
@@ -115,8 +136,9 @@ async function modules(session){
   try{const data=await api('modules?server='+encodeURIComponent(server)+'&id='+encodeURIComponent(session.id));
     $('module-status').textContent=data.receivedAt?'Received '+time(data.receivedAt)+(data.truncated?' · List capped at 128 modules.':''):'The client has not sent a module report yet.';
     if(!data.modules.length){empty($('modules'),'No module report for this session yet.',3);return;}
-    $('modules').replaceChildren();for(const module of data.modules){const row=document.createElement('tr');cell(row,module.name,true);const status=cell(row,'');
-      const badge=document.createElement('span');badge.className='badge'+(module.signature==='verified'?'':' review');badge.textContent=({verified:'Verified',unsigned:'Unsigned',untrusted:'Untrusted',read_error:'Unreadable'})[module.signature]??'Not checked';status.replaceChildren(badge);cell(row,module.sha256??'Hash unavailable',true).className='module-hash';$('modules').append(row);}
+    $('modules').replaceChildren();for(const module of [...data.modules].sort((a,b)=>!!b.flag-!!a.flag)){const row=document.createElement('tr');cell(row,module.name,true);const status=cell(row,'');
+      const badge=document.createElement('span');badge.className='badge'+(module.signature==='verified'?'':' review');badge.textContent=({verified:'Verified',unsigned:'Unsigned',untrusted:'Untrusted',read_error:'Unreadable'})[module.signature]??'Not checked';status.replaceChildren(badge);
+      if(module.flag){row.className='flagged';const flag=document.createElement('span');flag.className='badge alert';flag.textContent='⚠ '+module.flag;status.append(flag);}cell(row,module.sha256??'Hash unavailable',true).className='module-hash';$('modules').append(row);}
   }catch(error){empty($('modules'),error.message,3);}
   $('module-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
