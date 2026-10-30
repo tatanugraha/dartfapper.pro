@@ -338,25 +338,35 @@ export async function adminApi(request,env){
   }
   if(path.startsWith('/api/admin/'))return user.role==='super_admin'?adminRoutes(request,env,path):json({error:'forbidden'},403);
   if(path==='/api/moro'&&request.method==='GET')return moroDashboard(user,url.searchParams.get('server')??user.serverId,env);
-  // Client limits live on the gate (per PC and per network); owners manage their own server's limits.
-  if(path==='/api/policy'){
-    let data=null;if(request.method==='POST'){try{data=await body(request,512);}catch{return json({error:'invalid_request'},400);}}
-    else if(request.method!=='GET')return json({error:'not_found'},404);
-    const id=request.method==='POST'?data.server:url.searchParams.get('server');
+  // Client limits, kick and ban live on the gate; owners manage their own server, the Super Admin every server.
+  const gateActions={'/api/policy':'policy','/api/kick':'kick','/api/ban':'ban','/api/unban':'unban','/api/bans':'bans'};
+  if(Object.hasOwn(gateActions,path)){
+    const action=gateActions[path],write=request.method==='POST';
+    const allowed=action==='policy'?['GET','POST']:action==='bans'?['GET']:['POST'];if(!allowed.includes(request.method))return json({error:'not_found'},404);
+    let data=null;if(write){try{data=await body(request,512);}catch{return json({error:'invalid_request'},400);}}
+    let payload=null;
+    if(action==='policy'&&write){const {maxPerDevice,maxPerNetwork}=data;
+      if(!Number.isSafeInteger(maxPerDevice)||maxPerDevice<1||maxPerDevice>10||!Number.isSafeInteger(maxPerNetwork)||maxPerNetwork<0||maxPerNetwork>100)return json({error:'invalid_limits'},400);
+      payload={maxPerDevice,maxPerNetwork};}
+    if(action==='kick'){if(!/^[a-f0-9]{32}$/.test(data.id??''))return json({error:'invalid_id'},400);payload={id:data.id};}
+    if(action==='ban'||action==='unban'){if(!/^[a-f0-9]{64}$/.test(data.deviceId??''))return json({error:'invalid_device'},400);payload={deviceId:data.deviceId};}
+    if(action==='ban'){const reason=data.reason==null||data.reason===''?'':text(String(data.reason).trim(),200);
+      if(reason===null||/[\x00-\x1f\x7f]/.test(reason))return json({error:'invalid_reason'},400);payload.reason=reason;}
+    const id=write?data.server:url.searchParams.get('server');
     let target;try{target=await gateFor(user,id??(user.role==='server_owner'?user.serverId:'default'),env);}catch{return json({error:'data_key_not_configured'},503);}
     if(!target)return json({error:'server_not_found'},404);
     const gate=target.url&&target.key?gateUrl(target.url,env):null;if(!gate)return json({error:'gate_not_configured'},503);
-    let init={headers:{Authorization:'Bearer '+target.key},redirect:'error',signal:AbortSignal.timeout(4000)};
-    if(data){
-      const {maxPerDevice,maxPerNetwork}=data;
-      if(!Number.isSafeInteger(maxPerDevice)||maxPerDevice<1||maxPerDevice>10||!Number.isSafeInteger(maxPerNetwork)||maxPerNetwork<0||maxPerNetwork>100)return json({error:'invalid_limits'},400);
-      init={...init,method:'POST',headers:{...init.headers,'Content-Type':'application/json'},body:JSON.stringify({maxPerDevice,maxPerNetwork})};
-    }
+    const init={headers:{Authorization:'Bearer '+target.key,...(payload?{'Content-Type':'application/json'}:{})},redirect:'error',signal:AbortSignal.timeout(4000),
+      ...(payload?{method:'POST',body:JSON.stringify(payload)}:{})};
     try{
-      const response=await fetch(new URL('/internal/owner/policy',gate),init);
-      if(!response.ok)return json({error:response.status===400?'invalid_limits':'gate_unavailable'},response.status===400?400:502);
-      const policy=JSON.parse((await response.text()).slice(0,1024));
-      return json({maxPerDevice:policy.maxPerDevice,maxPerNetwork:policy.maxPerNetwork,networkPrefix:policy.networkPrefix});
+      const response=await fetch(new URL('/internal/owner/'+action,gate),init);
+      if(response.status===404&&(action==='kick'||action==='unban'))return json({error:action==='kick'?'session_closed':'not_banned'},404);
+      if(response.status===400)return json({error:action==='policy'?'invalid_limits':'invalid_request'},400);
+      if(!response.ok)return json({error:'gate_unavailable'},502);
+      const result=JSON.parse((await response.text()).slice(0,131072));
+      if(action==='policy')return json({maxPerDevice:result.maxPerDevice,maxPerNetwork:result.maxPerNetwork,networkPrefix:result.networkPrefix});
+      if(action==='bans')return json({bans:(Array.isArray(result.bans)?result.bans:[]).slice(0,500).map(b=>({deviceId:String(b.deviceId),reason:String(b.reason??''),bannedAt:b.bannedAt??null}))});
+      return json({ok:true,endedSessions:result.endedSessions??(action==='kick'?1:0)});
     }catch{return json({error:'gate_unavailable'},502);}
   }
   if(request.method!=='GET'||!['/api/sessions','/api/modules'].includes(path))return json({error:'not_found'},404);

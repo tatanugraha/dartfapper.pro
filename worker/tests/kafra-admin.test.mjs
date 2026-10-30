@@ -152,3 +152,22 @@ test('client limits are read and set on the owner gate; other servers and bad va
   assert.equal((await adminApi(request('policy?server='+other,undefined,owner),env)).status,404);
   assert.equal(seen.length,2);
 });
+test('kick, ban and unban go to the owner gate only, with validated input',async t=>{const env=await fixture(t),{own,other,owner}=await ownerSetup(env);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];
+  globalThis.fetch=async(url,init)=>{seen.push({url:String(url),method:init.method??'GET',body:init.body});
+    if(String(url).endsWith('/bans'))return new Response(JSON.stringify({bans:[{deviceId:'e'.repeat(64),reason:'Bot',bannedAt:'2026-10-30T00:00:00.000Z',secret:'x'}]}));
+    if(String(url).endsWith('/unban'))return new Response('{}',{status:404});
+    return new Response(JSON.stringify({endedSessions:1}));};
+  const post=(path,data)=>adminApi(request(path,{server:own,...data},owner),env);
+  assert.deepEqual(await (await post('kick',{id:'a'.repeat(32)})).json(),{ok:true,endedSessions:1});
+  assert.equal(seen[0].url,'https://gate.sovereign.test/internal/owner/kick');assert.equal(seen[0].body,JSON.stringify({id:'a'.repeat(32)}));
+  assert.equal((await post('ban',{deviceId:'e'.repeat(64),reason:'  Bot  '})).status,200);assert.equal(seen[1].body,JSON.stringify({deviceId:'e'.repeat(64),reason:'Bot'}));
+  assert.deepEqual((await (await adminApi(request('bans?server='+own,undefined,owner),env)).json()).bans,[{deviceId:'e'.repeat(64),reason:'Bot',bannedAt:'2026-10-30T00:00:00.000Z'}]);
+  assert.deepEqual(await (await post('unban',{deviceId:'e'.repeat(64)})).json(),{error:'not_banned'});
+  const before=seen.length;
+  for(const [path,data] of [['kick',{id:'zz'}],['ban',{deviceId:'x'}],['ban',{deviceId:'e'.repeat(64),reason:'a'.repeat(201)}],['ban',{deviceId:'e'.repeat(64),reason:'a\nb'}],['unban',{}]])
+    assert.equal((await post(path,data)).status,400,path+JSON.stringify(data));
+  assert.equal((await adminApi(request('kick',{server:other,id:'a'.repeat(32)},owner),env)).status,404);
+  assert.equal((await adminApi(request('kick?server='+own,undefined,owner),env)).status,404);
+  assert.equal(seen.length,before);
+});

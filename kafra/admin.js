@@ -2,7 +2,7 @@
 if(location.hostname==='dartfapper.pro'||location.hostname==='www.dartfapper.pro')location.replace('https://kafra-guard-owner.tatagpriyanugraha.workers.dev/');
 const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer;
 const roles={super_admin:'Super Admin',server_owner:'Server Owner',member:'Member'};
-const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
+const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',invalid_reason:'Reason must be 200 characters or fewer, on one line.',invalid_device:'Invalid device ID.',not_banned:'That device is not banned.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
 const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'That account is no longer available. Please try again.'};
 const providerNames={google:'Google',discord:'Discord'};
 // OAuth callbacks come back as /#sso_error=…, /#linked=… or /#signed_in; read once, then clear the hash.
@@ -66,7 +66,13 @@ function render(){
   for(const session of rows){const row=document.createElement('tr');const device=cell(row,session.deviceId.slice(0,16)+'…',true);device.title=session.deviceId;
     cell(row,session.ip);const build=cell(row,session.buildHash.slice(0,12)+'…',true);build.title=session.buildHash;
     cell(row,session.moduleCount===null?'Awaiting report':session.moduleCount+' modules');cell(row,time(session.lastSeen));
-    const action=document.createElement('td'),button=document.createElement('button');button.className='quiet';button.textContent='View modules →';button.addEventListener('click',()=>modules(session));action.append(button);row.append(action);tbody.append(row);}
+    const action=document.createElement('td'),button=document.createElement('button');button.className='quiet';button.textContent='View modules →';button.addEventListener('click',()=>modules(session));
+    const kick=document.createElement('button');kick.className='quiet danger';kick.textContent='Kick';kick.title='End this session; the game closes on its next heartbeat';
+    kick.addEventListener('click',()=>guardAction('Kick this client ('+session.ip+')? The game closes within about 30 seconds.',()=>post('kick',{server,id:session.id}),'Client kicked.'));
+    const ban=document.createElement('button');ban.className='quiet danger';ban.textContent='Ban';ban.title='Block this PC (hardware ID) from starting the game';
+    ban.addEventListener('click',()=>{const reason=prompt('Ban this PC from starting the game?\nDevice '+session.deviceId.slice(0,16)+'… ('+session.ip+')\n\nReason (optional, shown only here):','');
+      if(reason!==null)guardAction(null,()=>post('ban',{server,deviceId:session.deviceId,reason}),'PC banned. Its open game closes within about 30 seconds.');});
+    action.className='row-actions';action.append(button,kick,ban);row.append(action);tbody.append(row);}
   $('page-info').textContent=state.total?'Showing '+(state.offset+1)+'–'+Math.min(state.offset+state.sessions.length,state.total)+' of '+state.total+' sessions':'0 active sessions';
   $('previous').disabled=state.offset===0;$('next').disabled=state.offset+50>=state.total;
 }
@@ -76,6 +82,24 @@ async function load(){
   try{const data=await api('sessions?server='+encodeURIComponent(server)+'&offset='+state.offset);state={...state,...data};$('total').textContent=data.total;$('reported').textContent=data.sessions.filter(s=>s.moduleCount!==null).length;$('updated').textContent=time(data.updatedAt);$('message').textContent='';render();}
   catch(error){state={sessions:[],offset:state.offset,total:0};$('message').textContent=error.message;$('total').textContent='—';$('reported').textContent='—';$('updated').textContent='—';empty($('sessions'),'Data unavailable. The panel never shows sample data.',6);}
   finally{$('refresh').disabled=false;}
+  loadBans();
+}
+async function guardAction(question,send,done){
+  if(question&&!confirm(question))return;
+  try{await send();$('message').textContent=done;}catch(error){$('message').textContent=error.message;}
+  await load();
+}
+async function loadBans(){
+  if(!server)return;const tbody=$('bans');
+  try{const {bans}=await api('bans?server='+encodeURIComponent(server));tbody.replaceChildren();$('bans-panel').hidden=false;
+    $('bans-count').textContent=bans.length?bans.length+' banned':'';
+    if(!bans.length)empty(tbody,'No banned devices.',4);
+    for(const ban of bans){const row=document.createElement('tr');const device=cell(row,ban.deviceId.slice(0,16)+'…',true);device.title=ban.deviceId;
+      cell(row,ban.reason||'—');cell(row,ban.bannedAt?date(ban.bannedAt):'Config file');
+      const action=document.createElement('td'),unban=document.createElement('button');unban.className='quiet';unban.textContent='Unban';
+      unban.addEventListener('click',()=>guardAction('Unban this PC? It can start the game again.',()=>post('unban',{server,deviceId:ban.deviceId}),'PC unbanned.'));
+      action.append(unban);row.append(action);tbody.append(row);}}
+  catch{$('bans-panel').hidden=true;}
 }
 async function loadLimits(){
   if(!server)return;$('limits-status').textContent='';
