@@ -162,6 +162,9 @@ const envGate=env=>{const gate=env.KAFRA_GATE_URL?gateUrl(env.KAFRA_GATE_URL,env
 async function ensureEnvServer(env){
   const url=envGate(env);if(!url)return;
   if(await env.DB.prepare('SELECT id FROM kafra_servers WHERE gate_url=?').bind(url).first())return;
+  // Same host on another port (e.g. :8443 before the owner API moved behind nginx on 443): keep the row, update its URL.
+  const host=new URL(url).hostname,moved=(await env.DB.prepare('SELECT id,gate_url FROM kafra_servers WHERE gate_url IS NOT NULL AND gate_key IS NULL').all()).results.find(r=>{try{return new URL(r.gate_url).hostname===host;}catch{return false;}});
+  if(moved){await env.DB.prepare('UPDATE kafra_servers SET gate_url=? WHERE id=?').bind(url,moved.id).run();return;}
   const id=(await sha('env-gate|'+url)).slice(0,16);
   await env.DB.prepare('INSERT OR IGNORE INTO kafra_servers (id,name,kafra,gate_url,created_at) VALUES (?,?,1,?,?)').bind(id,(env.KAFRA_GATE_NAME||'Main server').slice(0,60),url,Date.now()).run();
 }

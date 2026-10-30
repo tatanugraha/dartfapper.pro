@@ -190,3 +190,8 @@ test('Linking a Google login that only opened a member account moves it to the s
   assert.equal(await env.DB.prepare('SELECT username FROM kafra_members WHERE username=?').bind(member).first(),null);
   assert.equal((await adminApi(request('me',undefined,first.cookie),env)).status,401);
 });
+test('Moving the env gate to another port on the same host keeps its server row',async t=>{const base=await fixture(t),env={...base,KAFRA_GATE_NAME:'Ragna Next',KAFRA_GATE_URL:'https://gate.ragna.test:8443/',KAFRA_GATE_KEY:gateKey},admin=await login(env);
+  const before=(await (await adminApi(request('admin/servers',undefined,admin),env)).json()).servers;
+  const after=(await (await adminApi(request('admin/servers',undefined,admin),{...env,KAFRA_GATE_URL:'https://gate.ragna.test/'})).json()).servers;
+  assert.equal(after.length,1);assert.equal(after[0].id,before[0].id);assert.equal(after[0].gateUrl,'https://gate.ragna.test/');assert.equal(after[0].builtIn,true);
+});
