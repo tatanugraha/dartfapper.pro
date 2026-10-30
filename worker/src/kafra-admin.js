@@ -306,7 +306,8 @@ async function moroDashboard(user,id,env){
     ensureMoroOnline(env).then(()=>q('SELECT char_id,account_id,userid,char_name,base_level,ip,reported_at FROM moro_online WHERE server_id=? AND reported_at>? ORDER BY char_name LIMIT 500',now-3*60000).all()),
     ensureMoroPlayers(env).then(()=>q("SELECT account_id,char_id,char_name,device,os,app_version,last_seen FROM moro_players WHERE server_id=? AND last_seen>? ORDER BY char_name='',char_name LIMIT 200",now-3*60000).all())
   ]);
-  const ota=await moroOtaView(env,id);
+  // OTA (what phones run, update / rollback) is Super Admin only; owners get no ota field.
+  const ota=user.role==='super_admin'?await moroOtaView(env,id):undefined;
   return json({server:{id,name:row.name},ota,license:{plan:row.moro_plan,expiresAt:row.moro_expires,active:!row.moro_expires||row.moro_expires>now},
     builds:builds.results.map(b=>({id:b.id,version:b.version,url:b.url,notes:b.notes,publishedAt:b.created_at})),
     inGame:inGame.results.map(p=>({charId:p.char_id,accountId:p.account_id,userid:p.userid,name:p.char_name,level:p.base_level,ip:p.ip,reportedAt:p.reported_at})),

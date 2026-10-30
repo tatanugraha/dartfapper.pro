@@ -180,6 +180,7 @@ async function modules(session){reportSession=session;
 }
 // OTA per server: what each channel serves (reported by the agent on the update host) and promote canary -> production.
 function renderOta(ota){
+  $('ota-panel').hidden=user?.role!=='super_admin';if(user?.role!=='super_admin')return;
   const label=c=>c?.version?(c.tag||'untagged')+(c.dirty?' (dirty)':''):'Nothing published';
   const meta=c=>c?.version?['version '+c.version,c.builtAt?'built '+date(Date.parse(c.builtAt)):null,c.commit?'commit '+c.commit.slice(0,7):null].filter(Boolean).join(' \u00b7 '):'';
   $('ota-prod').textContent=label(ota?.production);$('ota-prod-meta').textContent=meta(ota?.production);
