@@ -232,8 +232,8 @@ async function moroServerReport(env,server,data){
   return json({ok:true,players:rows.length});
 }
 // OTA (live code update) per Mobile RO server. The agent on the update host (worker/tools/moro-ota-agent.py) reports
-// what each channel serves and polls for one pending action. Only promote is offered here: it copies the canary bundle,
-// already signed on the PC. Rollback needs a new signature, so it stays a PC command (ota-admin.ps1).
+// what each channel serves and polls for one pending action: promote (copies the canary bundle) or rollback (applies the
+// rollback publish-web.ps1 signed on the PC for the live bundle). Both are signed on the PC; the host only copies files.
 const moroOtaSql="CREATE TABLE IF NOT EXISTS moro_ota (server_id TEXT PRIMARY KEY, state TEXT NOT NULL DEFAULT '{}', reported_at INTEGER NOT NULL DEFAULT 0, pending_id TEXT, pending_action TEXT, pending_by TEXT, pending_at INTEGER, result TEXT)";
 let moroOtaReady=false;
 async function ensureMoroOta(env){if(!moroOtaReady){await env.DB.prepare(moroOtaSql).run();moroOtaReady=true;}}
@@ -245,7 +245,7 @@ function otaChannel(value){
 }
 async function moroOtaReport(env,server,data){
   await ensureMoroOta(env);const now=Date.now();
-  const state={production:otaChannel(data?.production),canary:otaChannel(data?.canary)};
+  const state={production:otaChannel(data?.production),canary:otaChannel(data?.canary),rollback:otaChannel(data?.rollback)};
   const row=await env.DB.prepare('SELECT pending_id FROM moro_ota WHERE server_id=?').bind(server.id).first();
   const done=data?.done&&typeof data.done==='object'&&row?.pending_id&&data.done.id===row.pending_id?data.done:null;
   const result=done?JSON.stringify({ok:done.ok===true,message:typeof done.message==='string'?done.message.replace(/[\x00-\x1f\x7f]/g,' ').slice(0,300):'',at:now}):null;
@@ -372,12 +372,13 @@ async function adminRoutes(request,env,path){
   }
   if(path==='/api/admin/moro/ota'){
     if(!serverId.test(data.serverId??'')||!await env.DB.prepare('SELECT id FROM kafra_servers WHERE id=? AND moro=1').bind(data.serverId).first())return json({error:'invalid_server'},400);
-    if(data.action!=='promote')return json({error:'invalid_action'},400);
+    if(!['promote','rollback'].includes(data.action))return json({error:'invalid_action'},400);
     const ota=await moroOtaView(env,data.serverId);
     if(!ota.connected)return json({error:'ota_agent_offline'},409);
     if(ota.pending)return json({error:'ota_busy'},409);
-    if(!ota.canary?.version||(ota.production?.version&&ota.canary.version<=ota.production.version))return json({error:'ota_nothing_to_promote'},409);
-    await env.DB.prepare('UPDATE moro_ota SET pending_id=?,pending_action=?,pending_by=?,pending_at=? WHERE server_id=?').bind(hex(crypto.getRandomValues(new Uint8Array(8))),'promote',superUser(env),Date.now(),data.serverId).run();
+    if(data.action==='promote'&&(!ota.canary?.version||(ota.production?.version&&ota.canary.version<=ota.production.version)))return json({error:'ota_nothing_to_promote'},409);
+    if(data.action==='rollback'&&!ota.rollback?.version)return json({error:'ota_no_rollback'},409);
+    await env.DB.prepare('UPDATE moro_ota SET pending_id=?,pending_action=?,pending_by=?,pending_at=? WHERE server_id=?').bind(hex(crypto.getRandomValues(new Uint8Array(8))),data.action,superUser(env),Date.now(),data.serverId).run();
     return json({ok:true});
   }
   if(path==='/api/admin/moro/builds/delete'){

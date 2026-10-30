@@ -262,5 +262,10 @@ test('OTA per server: agent reports channels, Super Admin requests promote, agen
   assert.deepEqual(await agent({...state,production:state.canary,done:{id:'wrong',ok:true}}),{ok:true,action});
   assert.deepEqual(await agent({...state,production:state.canary,done:{id:action.id,ok:true,message:'promoted 200'}}),{ok:true,action:null});
   view=(await (await adminApi(request('moro',undefined,owner),env)).json()).ota;assert.equal(view.pending,null);assert.equal(view.lastResult.ok,true);assert.equal(view.production.version,200);
-  assert.equal((await adminApi(request('admin/moro/ota',{serverId:own,action:'rollback'},admin),env)).status,400);
+  const rollback=()=>adminApi(request('admin/moro/ota',{serverId:own,action:'rollback'},admin),env);
+  assert.deepEqual(await (await rollback()).json(),{error:'ota_no_rollback'});
+  assert.equal((await adminApi(request('admin/moro/ota',{serverId:own,action:'wipe'},admin),env)).status,400);
+  await agent({production:state.canary,canary:state.canary,rollback:{version:100,tag:'v1.0.18'}});
+  view=(await (await adminApi(request('moro',undefined,owner),env)).json()).ota;assert.equal(view.rollback.tag,'v1.0.18');
+  assert.equal((await rollback()).status,200);assert.equal((await agent({production:state.canary})).action.action,'rollback');
 });
