@@ -2,7 +2,7 @@
 if(location.hostname==='dartfapper.pro'||location.hostname==='www.dartfapper.pro')location.replace('https://kafra-guard-owner.tatagpriyanugraha.workers.dev/');
 const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer;
 const roles={super_admin:'Super Admin',server_owner:'Server Owner',member:'Member'};
-const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
+const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
 const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'That account is no longer available. Please try again.'};
 const providerNames={google:'Google',discord:'Discord'};
 // OAuth callbacks come back as /#sso_error=…, /#linked=… or /#signed_in; read once, then clear the hash.
@@ -36,7 +36,7 @@ function view(name){
   for(const id of views)$(id).hidden=id!==name;
   for(const item of document.querySelectorAll('[data-view]'))item.setAttribute('aria-current',String(item.dataset.view===name));
   clearInterval(timer);
-  if(name==='dashboard'){timer=setInterval(()=>{if(!document.hidden)load();},15000);load();}
+  if(name==='dashboard'){timer=setInterval(()=>{if(!document.hidden)load();},15000);load();loadLimits();}
   else if(name==='moro'){timer=setInterval(()=>{if(!document.hidden)loadMoro();},30000);loadMoro();}
   else if(name==='admin')loadAdmin();
   else if(name==='settings')api('me').then(applyAccess).catch(error=>{$('settings-message').textContent=error.message;});
@@ -77,6 +77,15 @@ async function load(){
   catch(error){state={sessions:[],offset:state.offset,total:0};$('message').textContent=error.message;$('total').textContent='—';$('reported').textContent='—';$('updated').textContent='—';empty($('sessions'),'Data unavailable. The panel never shows sample data.',6);}
   finally{$('refresh').disabled=false;}
 }
+async function loadLimits(){
+  if(!server)return;$('limits-status').textContent='';
+  try{const policy=await api('policy?server='+encodeURIComponent(server));$('limit-device').value=policy.maxPerDevice;$('limit-network').value=policy.maxPerNetwork;$('limits-form').hidden=false;}
+  catch(error){$('limits-form').hidden=true;}
+}
+$('limits-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('limits-form').querySelector('button.primary');button.disabled=true;
+  try{const policy=await post('policy',{server,maxPerDevice:Number($('limit-device').value),maxPerNetwork:Number($('limit-network').value)});
+    $('limit-device').value=policy.maxPerDevice;$('limit-network').value=policy.maxPerNetwork;$('limits-status').textContent='Saved · applies to new game starts';}
+  catch(error){$('limits-status').textContent=error.message;}finally{button.disabled=false;}});
 async function modules(session){
   $('module-panel').hidden=false;$('module-title').textContent='Client modules · '+session.ip;empty($('modules'),'Loading client report…',3);$('module-status').textContent='';
   try{const data=await api('modules?server='+encodeURIComponent(server)+'&id='+encodeURIComponent(session.id));
@@ -160,7 +169,7 @@ $('login').addEventListener('submit',async event=>{event.preventDefault();$('log
   const password=$('password').value;$('password').value='';try{await api('login',{method:'POST',body:JSON.stringify({username:$('login-user').value.trim(),password})});showDashboard(await api('me'));}catch(error){$('login-error').textContent=error.message;}finally{$('login-button').disabled=false;}});
 $('logout').addEventListener('click',async()=>{try{await post('logout',{});showLogin();}catch(error){$('message').textContent=error.message;}});
 for(const item of document.querySelectorAll('[data-view]'))item.addEventListener('click',()=>view(item.dataset.view));
-$('server').addEventListener('change',()=>{server=$('server').value;state.offset=0;$('module-panel').hidden=true;load();});
+$('server').addEventListener('change',()=>{server=$('server').value;state.offset=0;$('module-panel').hidden=true;load();loadLimits();});
 $('moro-server').addEventListener('change',()=>{moroServer=$('moro-server').value;loadMoro();});
 $('refresh').addEventListener('click',load);$('moro-refresh').addEventListener('click',loadMoro);$('search').addEventListener('input',render);$('close-modules').addEventListener('click',()=>{$('module-panel').hidden=true;});
 $('previous').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-50);load();});$('next').addEventListener('click',()=>{state.offset+=50;load();});

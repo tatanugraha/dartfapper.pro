@@ -138,3 +138,17 @@ test('SSO buttons stay off until a provider is configured',async t=>{const env=a
   assert.deepEqual((await (await adminApi(request('providers'),env)).json()).providers,[]);
   assert.equal((await adminApi(request('oauth/google/start?mode=login'),env)).headers.get('Location'),'/#sso_error=unavailable');
 });
+test('client limits are read and set on the owner gate; other servers and bad values are refused',async t=>{const env=await fixture(t),{own,other,owner}=await ownerSetup(env);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];
+  globalThis.fetch=async(url,init)=>{seen.push({url:String(url),method:init.method??'GET',auth:init.headers.Authorization,body:init.body});
+    return new Response(JSON.stringify(init.body?{...JSON.parse(init.body),networkPrefix:24,extra:'x'}:{maxPerDevice:2,maxPerNetwork:0,networkPrefix:24}));};
+  assert.deepEqual(await (await adminApi(request('policy?server='+own,undefined,owner),env)).json(),{maxPerDevice:2,maxPerNetwork:0,networkPrefix:24});
+  assert.equal(seen[0].url,'https://gate.sovereign.test/internal/owner/policy');assert.equal(seen[0].auth,'Bearer '+gateKey);
+  const saved=await adminApi(request('policy',{server:own,maxPerDevice:1,maxPerNetwork:4},owner),env);
+  assert.deepEqual(await saved.json(),{maxPerDevice:1,maxPerNetwork:4,networkPrefix:24});assert.equal(seen[1].method,'POST');assert.equal(seen[1].body,'{"maxPerDevice":1,"maxPerNetwork":4}');
+  for(const bad of [{maxPerDevice:0,maxPerNetwork:0},{maxPerDevice:11,maxPerNetwork:0},{maxPerDevice:1,maxPerNetwork:101},{maxPerDevice:'1',maxPerNetwork:0}])
+    assert.equal((await adminApi(request('policy',{server:own,...bad},owner),env)).status,400);
+  assert.equal((await adminApi(request('policy',{server:other,maxPerDevice:1,maxPerNetwork:0},owner),env)).status,404);
+  assert.equal((await adminApi(request('policy?server='+other,undefined,owner),env)).status,404);
+  assert.equal(seen.length,2);
+});

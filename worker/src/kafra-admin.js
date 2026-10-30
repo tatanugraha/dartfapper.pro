@@ -338,6 +338,27 @@ export async function adminApi(request,env){
   }
   if(path.startsWith('/api/admin/'))return user.role==='super_admin'?adminRoutes(request,env,path):json({error:'forbidden'},403);
   if(path==='/api/moro'&&request.method==='GET')return moroDashboard(user,url.searchParams.get('server')??user.serverId,env);
+  // Client limits live on the gate (per PC and per network); owners manage their own server's limits.
+  if(path==='/api/policy'){
+    let data=null;if(request.method==='POST'){try{data=await body(request,512);}catch{return json({error:'invalid_request'},400);}}
+    else if(request.method!=='GET')return json({error:'not_found'},404);
+    const id=request.method==='POST'?data.server:url.searchParams.get('server');
+    let target;try{target=await gateFor(user,id??(user.role==='server_owner'?user.serverId:'default'),env);}catch{return json({error:'data_key_not_configured'},503);}
+    if(!target)return json({error:'server_not_found'},404);
+    const gate=target.url&&target.key?gateUrl(target.url,env):null;if(!gate)return json({error:'gate_not_configured'},503);
+    let init={headers:{Authorization:'Bearer '+target.key},redirect:'error',signal:AbortSignal.timeout(4000)};
+    if(data){
+      const {maxPerDevice,maxPerNetwork}=data;
+      if(!Number.isSafeInteger(maxPerDevice)||maxPerDevice<1||maxPerDevice>10||!Number.isSafeInteger(maxPerNetwork)||maxPerNetwork<0||maxPerNetwork>100)return json({error:'invalid_limits'},400);
+      init={...init,method:'POST',headers:{...init.headers,'Content-Type':'application/json'},body:JSON.stringify({maxPerDevice,maxPerNetwork})};
+    }
+    try{
+      const response=await fetch(new URL('/internal/owner/policy',gate),init);
+      if(!response.ok)return json({error:response.status===400?'invalid_limits':'gate_unavailable'},response.status===400?400:502);
+      const policy=JSON.parse((await response.text()).slice(0,1024));
+      return json({maxPerDevice:policy.maxPerDevice,maxPerNetwork:policy.maxPerNetwork,networkPrefix:policy.networkPrefix});
+    }catch{return json({error:'gate_unavailable'},502);}
+  }
   if(request.method!=='GET'||!['/api/sessions','/api/modules'].includes(path))return json({error:'not_found'},404);
   let target;
   try{target=await gateFor(user,url.searchParams.get('server')??(user.role==='server_owner'?user.serverId:'default'),env);}
