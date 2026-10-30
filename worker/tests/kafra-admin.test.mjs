@@ -90,3 +90,39 @@ test('Mobile RO: ingest key is shown once, app reports reach only that server ow
   assert.equal((await adminApi(request('admin/servers/moro',{id:own,enabled:false},admin),env)).status,200);
   assert.equal((await adminApi(request('moro',undefined,owner),env)).status,404);
 });
+const sso={GOOGLE_CLIENT_ID:'g-id',GOOGLE_CLIENT_SECRET:'g-secret',DISCORD_CLIENT_ID:'d-id',DISCORD_CLIENT_SECRET:'d-secret'};
+// Fake provider: the token endpoint records the form; the profile endpoint returns whoever `profile.current` is.
+function fakeProviders(t,profile){const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];
+  globalThis.fetch=async(url,init)=>{url=String(url);
+    if(url.includes('token')){seen.push(Object.fromEntries(new URLSearchParams(String(init.body))));return new Response(JSON.stringify({access_token:'access-'+seen.length}));}
+    return new Response(JSON.stringify(profile.current));};return seen;}
+async function oauth(env,provider,mode,cookie){
+  const start=await adminApi(request('oauth/'+provider+'/start?mode='+mode,undefined,cookie),env);assert.equal(start.status,302);
+  if(start.headers.get('Location').startsWith('/'))return {location:start.headers.get('Location')};
+  const location=new URL(start.headers.get('Location'));
+  const callback=await adminApi(request('oauth/'+provider+'/callback?code=abc&state='+location.searchParams.get('state')),env);
+  return {start:location,state:location.searchParams.get('state'),location:callback.headers.get('Location'),cookie:callback.headers.get('Set-Cookie')?.split(';')[0]};}
+test('Google/Discord sign-in only works for accounts that linked it in Settings',async t=>{const env={...await fixture(t),...sso},{owner}=await ownerSetup(env);
+  const profile={current:{sub:'google-123',email:'owner@gmail.test',email_verified:true}},seen=fakeProviders(t,profile);
+  assert.deepEqual((await (await adminApi(request('providers'),env)).json()).providers,['google','discord']);
+  assert.equal((await oauth(env,'google','login')).location,'/#sso_error=not_linked');
+  const linked=await oauth(env,'google','link',owner);assert.equal(linked.location,'/#linked=google');
+  assert.ok(linked.start.searchParams.get('code_challenge'));assert.ok(seen.at(-1).code_verifier);assert.equal(seen.at(-1).redirect_uri,'https://guard.example.test/api/oauth/google/callback');
+  const me=await (await adminApi(request('me',undefined,owner),env)).json();assert.deepEqual(me.identities.map(i=>[i.provider,i.label]),[['google','owner@gmail.test']]);
+  const signedIn=await oauth(env,'google','login');assert.equal(signedIn.location,'/#signed_in');
+  assert.equal((await (await adminApi(request('me',undefined,signedIn.cookie),env)).json()).username,'sov.owner');
+  assert.equal((await adminApi(request('oauth/google/callback?code=abc&state='+signedIn.state),env)).headers.get('Location'),'/#sso_error=expired');
+  const admin=await login(env);assert.equal((await oauth(env,'google','link',admin)).location,'/#sso_error=already_linked');
+  profile.current={sub:'google-999',email:'x@gmail.test',email_verified:false};assert.equal((await oauth(env,'google','login')).location,'/#sso_error=provider');
+  profile.current={id:'discord-42',username:'tata'};assert.equal((await oauth(env,'discord','link',admin)).location,'/#linked=discord');
+  assert.equal((await (await adminApi(request('me',undefined,(await oauth(env,'discord','login')).cookie),env)).json()).role,'super_admin');
+  assert.equal((await oauth(env,'discord','link')).location,'/#sso_error=signin_first');
+  assert.equal((await adminApi(request('identities/unlink',{provider:'discord'},admin),env)).status,200);
+  assert.equal((await oauth(env,'discord','login')).location,'/#sso_error=not_linked');
+  await adminApi(request('admin/owners/delete',{username:'sov.owner'},admin),env);
+  profile.current={sub:'google-123',email:'owner@gmail.test',email_verified:true};assert.equal((await oauth(env,'google','login')).location,'/#sso_error=not_linked');
+});
+test('SSO buttons stay off until a provider is configured',async t=>{const env=await fixture(t);
+  assert.deepEqual((await (await adminApi(request('providers'),env)).json()).providers,[]);
+  assert.equal((await adminApi(request('oauth/google/start?mode=login'),env)).headers.get('Location'),'/#sso_error=unavailable');
+});

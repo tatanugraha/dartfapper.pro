@@ -78,11 +78,26 @@ untuk membuka ownerKey yang sudah tersimpan):
 node worker/tools/add-kafra-data-key.mjs E:\gameshield\.local\kafra-owner-admin
 ```
 
+## Sign-in Google / Discord (SSO)
+
+SSO tidak pernah membuat akun. User login dengan password dulu, lalu menautkan Google/Discord di **Settings → Connected accounts**.
+Tombol SSO di halaman login baru muncul setelah provider dikonfigurasi.
+
+- Google: buat OAuth client (Web) di Google Cloud, redirect URI
+  `https://kafra-guard-owner.tatagpriyanugraha.workers.dev/api/oauth/google/callback`. Isi `GOOGLE_CLIENT_ID` di vars,
+  lalu `npx wrangler secret put GOOGLE_CLIENT_SECRET --config worker/wrangler.kafra.jsonc`.
+- Discord: di app `1376624589630738492` tambahkan redirect
+  `https://kafra-guard-owner.tatagpriyanugraha.workers.dev/api/oauth/discord/callback`, lalu
+  `npx wrangler secret put DISCORD_CLIENT_SECRET --config worker/wrangler.kafra.jsonc`.
+
 ## Deployment yang belum dijalankan
 
 1. Review binding D1 pada `wrangler.kafra.jsonc`. Default menggunakan D1 auth
    yang sudah ada, dengan tabel admin terpisah; tidak memakai database game.
 2. Terapkan tabel baru (aman diulang; juga menambah tabel server & owner): `npx wrangler d1 execute dartfapper-auth --remote --file worker/kafra-schema.sql --config worker/wrangler.kafra.jsonc`.
+   Lalu daftarkan server yang sudah ada (Lepak RO & OTTi RO sebagai Mobile RO; aman diulang):
+   `npx wrangler d1 execute dartfapper-auth --remote --file worker/kafra-seed.sql --config worker/wrangler.kafra.jsonc`.
+   Ragna Next (Kafra Guard) adalah gate milik Super Admin (`KAFRA_GATE_NAME`), selalu tampil, dan aktif setelah `KAFRA_GATE_URL` di-set.
 3. Set secrets: `npx wrangler secret bulk E:\gameshield\.local\kafra-owner-admin\worker-secrets.json --config worker/wrangler.kafra.jsonc`.
 4. Set `KAFRA_GATE_URL` pada vars Worker ke root HTTPS gate VPS. Tambahkan
    ownerKey yang sesuai di private config gate, lalu restart gate.

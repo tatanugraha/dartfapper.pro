@@ -3,16 +3,20 @@ if(location.hostname==='dartfapper.pro'||location.hostname==='www.dartfapper.pro
 const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer;
 const roles={super_admin:'Super Admin',server_owner:'Server Owner'};
 const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.'};
+const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'No account is linked to that login yet. Sign in with your password and link it in Settings.'};
+const providerNames={google:'Google',discord:'Discord'};
+// OAuth callbacks come back as /#sso_error=…, /#linked=… or /#signed_in; read once, then clear the hash.
+const returned=Object.fromEntries(new URLSearchParams(location.hash.slice(1)));if(location.hash)history.replaceState(null,'',location.pathname);
 async function api(path,options={}){
   const response=await fetch('/api/'+path,{...options,credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json',...options.headers}});
   let data;try{data=await response.json();}catch{throw new Error('Invalid server response.');}
   if(!response.ok){if(response.status===401&&!path.startsWith('login'))showLogin();throw new Error(errors[data.error]??'Request failed. Please try again.');}return data;
 }
 const post=(path,data)=>api(path,{method:'POST',body:JSON.stringify(data)});
-const views=['dashboard','moro','admin','empty-view'];
-function showLogin(){user=null;for(const id of [...views,'account','side-nav','side-label'])$(id).hidden=true;$('login-section').hidden=false;$('side-role').textContent='Restricted access';$('side-note').textContent='Invite-only accounts.';clearInterval(timer);}
+const views=['dashboard','moro','admin','settings','empty-view'];
+function showLogin(){user=null;loadProviders();for(const id of [...views,'account','side-nav','side-label'])$(id).hidden=true;$('login-section').hidden=false;$('side-role').textContent='Restricted access';$('side-note').textContent='Invite-only accounts.';clearInterval(timer);}
 function applyAccess(me){
-  user=me;servers=me.servers;const kafra=servers.filter(s=>s.kafra),moro=servers.filter(s=>s.moro);
+  user=me;renderSettings(me);servers=me.servers;const kafra=servers.filter(s=>s.kafra),moro=servers.filter(s=>s.moro);
   $('nav-kafra').hidden=!kafra.length;$('nav-moro').hidden=!moro.length;$('nav-admin').hidden=me.role!=='super_admin';
   fillPicker('server','server-pick',kafra,'server');fillPicker('moro-server','moro-pick',moro,'moroServer');
 }
@@ -35,6 +39,18 @@ function view(name){
   if(name==='dashboard'){timer=setInterval(()=>{if(!document.hidden)load();},15000);load();}
   else if(name==='moro'){timer=setInterval(()=>{if(!document.hidden)loadMoro();},30000);loadMoro();}
   else if(name==='admin')loadAdmin();
+  else if(name==='settings')api('me').then(applyAccess).catch(error=>{$('settings-message').textContent=error.message;});
+}
+async function loadProviders(){
+  try{const {providers}=await api('providers');$('sso').hidden=!providers.length;for(const name of Object.keys(providerNames))$('sso-'+name).hidden=!providers.includes(name);}catch{$('sso').hidden=true;}
+}
+function renderSettings(me){
+  for(const row of document.querySelectorAll('[data-connection]')){
+    const name=row.dataset.connection,linked=me.identities?.find(i=>i.provider===name),available=me.providers?.includes(name);
+    row.querySelector('[data-connection-status]').textContent=linked?'Linked'+(linked.label?' as '+linked.label:'')+' · '+new Date(linked.linkedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):available?'Not linked':'Not available yet';
+    const link=row.querySelector('[data-connection-link]');link.hidden=!available;link.textContent=(linked?'Relink ':'Link ')+providerNames[name];
+    row.querySelector('[data-connection-unlink]').hidden=!linked;row.classList.toggle('linked',!!linked);
+  }
 }
 function time(value){return value?new Date(value).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—';}
 function date(value){return value?new Date(value).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';}
@@ -134,6 +150,9 @@ submitter('kafra-form',()=>post('admin/servers/kafra',{id:managed.id,enabled:$('
 submitter('moro-form',async()=>{const result=await post('admin/servers/moro',{id:managed.id,enabled:$('moro-enabled').checked,plan:$('moro-plan-input').value,expiresAt:$('moro-expires-input').value,rotateKey:$('moro-rotate').checked});
   $('key-output').hidden=!result.ingestKey;$('key-value').textContent=result.ingestKey??'';if(result.ingestKey)$('key-output').scrollIntoView({behavior:'smooth',block:'nearest'});},false);
 submitter('build-form',()=>post('admin/moro/builds',{serverId:managed.id,version:$('build-version').value,url:$('build-url').value,notes:$('build-notes').value}));
+for(const button of document.querySelectorAll('[data-connection-unlink]'))button.addEventListener('click',async()=>{
+  const name=button.closest('[data-connection]').dataset.connection;if(!confirm('Unlink '+providerNames[name]+'? You can still sign in with your password.'))return;
+  try{await post('identities/unlink',{provider:name});$('settings-message').textContent=providerNames[name]+' unlinked.';applyAccess(await api('me'));}catch(error){$('settings-message').textContent=error.message;}});
 $('close-manage').addEventListener('click',()=>{managed=null;$('manage').hidden=true;});
 $('login').addEventListener('submit',async event=>{event.preventDefault();$('login-button').disabled=true;$('login-error').textContent='';
   const password=$('password').value;$('password').value='';try{await api('login',{method:'POST',body:JSON.stringify({username:$('login-user').value.trim(),password})});showDashboard(await api('me'));}catch(error){$('login-error').textContent=error.message;}finally{$('login-button').disabled=false;}});
@@ -143,4 +162,6 @@ $('server').addEventListener('change',()=>{server=$('server').value;state.offset
 $('moro-server').addEventListener('change',()=>{moroServer=$('moro-server').value;loadMoro();});
 $('refresh').addEventListener('click',load);$('moro-refresh').addEventListener('click',loadMoro);$('search').addEventListener('input',render);$('close-modules').addEventListener('click',()=>{$('module-panel').hidden=true;});
 $('previous').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-50);load();});$('next').addEventListener('click',()=>{state.offset+=50;load();});
-api('me').then(showDashboard).catch(showLogin);
+api('me').then(me=>{showDashboard(me);
+  if(returned.linked||returned.sso_error){view('settings');$('settings-message').textContent=returned.linked?providerNames[returned.linked]+' is now linked. You can use it to sign in.':ssoErrors[returned.sso_error]??'Linking failed. Please try again.';}
+}).catch(()=>{showLogin();if(returned.sso_error)$('login-error').textContent=ssoErrors[returned.sso_error]??'Sign-in failed. Please try again.';});

@@ -19,14 +19,92 @@ const ownerVersion=(env,owner)=>sha(owner.password_hash+'|'+env.KAFRA_ADMIN_PEPP
 const ownerName=/^[a-z0-9][a-z0-9_.-]{2,31}$/,serverId=/^[a-f0-9]{16}$/,dummyHash='0'.repeat(32)+':'+'0'.repeat(64);
 // Printable text (tabs/newlines allowed) within a length bound, or null.
 const text=(value,max)=>typeof value==='string'&&value.length>=1&&value.length<=max&&!/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)?value:null;
-async function current(request,env){
-  const value=cookie(request);if(!/^[A-Za-z0-9_-]{43}$/.test(value??''))return null;
-  const row=await env.DB.prepare('SELECT username,verifier_version FROM kafra_admin_sessions WHERE token_hash=? AND expires_at>?').bind(await sha(value),Date.now()).first();
+async function sessionUser(env,tokenHash){
+  const row=await env.DB.prepare('SELECT username,verifier_version FROM kafra_admin_sessions WHERE token_hash=? AND expires_at>?').bind(tokenHash,Date.now()).first();
   if(!row)return null;
   if(row.username===superUser(env))return equal(row.verifier_version,await superVersion(env))?{username:row.username,role:'super_admin'}:null;
   const owner=await env.DB.prepare('SELECT username,password_hash,server_id FROM kafra_owners WHERE username=?').bind(row.username).first();
   if(!owner||!equal(row.verifier_version,await ownerVersion(env,owner)))return null;
   return {username:owner.username,role:'server_owner',serverId:owner.server_id};
+}
+async function current(request,env){
+  const value=cookie(request);if(!/^[A-Za-z0-9_-]{43}$/.test(value??''))return null;
+  return sessionUser(env,await sha(value));
+}
+async function createSession(env,username,verifier){
+  const value=token(),now=Date.now();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE expires_at<?').bind(now),
+    env.DB.prepare('DELETE FROM kafra_admin_attempts WHERE expires_at<?').bind(now),
+    env.DB.prepare('INSERT INTO kafra_admin_sessions (token_hash,username,verifier_version,expires_at) VALUES (?,?,?,?)').bind(await sha(value),username,verifier,now+ttl)
+  ]);
+  return cookieName+'='+value+'; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Strict';
+}
+// Verifier for an existing account, used when SSO signs it in without a password.
+async function accountVerifier(env,username){
+  if(username===superUser(env))return env.KAFRA_ADMIN_HASH&&env.KAFRA_ADMIN_PEPPER?{role:'super_admin',verifier:await superVersion(env)}:null;
+  const owner=await env.DB.prepare('SELECT username,password_hash,server_id FROM kafra_owners WHERE username=?').bind(username).first();
+  return owner?{role:'server_owner',verifier:await ownerVersion(env,owner)}:null;
+}
+const b64u=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const home=(fragment,headers={})=>new Response(null,{status:302,headers:{Location:'/#'+fragment,'Cache-Control':'no-store',...headers}});
+const label=value=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,'').slice(0,100):null;
+const providers={
+  google:{authorize:'https://accounts.google.com/o/oauth2/v2/auth',token:'https://oauth2.googleapis.com/token',scope:'openid email',pkce:true,extra:{prompt:'select_account'},
+    id:env=>env.GOOGLE_CLIENT_ID,secret:env=>env.GOOGLE_CLIENT_SECRET,
+    async profile(access){const r=await fetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(5000)});
+      const p=r.ok?await r.json():null;if(typeof p?.sub!=='string'||p.email_verified!==true)throw new Error('profile');return {subject:p.sub,label:label(p.email)};}},
+  discord:{authorize:'https://discord.com/oauth2/authorize',token:'https://discord.com/api/oauth2/token',scope:'identify',pkce:false,extra:{prompt:'none'},
+    id:env=>env.DISCORD_CLIENT_ID,secret:env=>env.DISCORD_CLIENT_SECRET,
+    async profile(access){const r=await fetch('https://discord.com/api/users/@me',{headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(5000)});
+      const p=r.ok?await r.json():null;if(typeof p?.id!=='string')throw new Error('profile');return {subject:p.id,label:label(p.username)};}}
+};
+const configured=env=>Object.keys(providers).filter(name=>providers[name].id(env)&&providers[name].secret(env));
+async function oauthStart(request,env,name,url){
+  const p=providers[name];if(!configured(env).includes(name))return home('sso_error=unavailable');
+  const ip=request.headers.get('CF-Connecting-IP')??'local',bucket=Math.floor(Date.now()/900000);
+  if(await bump(env,await sha('oauth|'+ip+'|'+bucket),(bucket+1)*900000)>30)return home('sso_error=too_many_attempts');
+  const mode=url.searchParams.get('mode')==='link'?'link':'login';let username=null,session=null;
+  if(mode==='link'){const user=await current(request,env);if(!user)return home('sso_error=signin_first');username=user.username;session=await sha(cookie(request));}
+  const state=token(),verifier=p.pkce?token():null,now=Date.now();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM kafra_oauth_states WHERE expires_at<?').bind(now),
+    env.DB.prepare('INSERT INTO kafra_oauth_states (state_hash,provider,mode,username,session_hash,verifier,expires_at) VALUES (?,?,?,?,?,?,?)').bind(await sha(state),name,mode,username,session,verifier,now+600000)
+  ]);
+  const auth=new URL(p.authorize);
+  auth.search=new URLSearchParams({client_id:p.id(env),redirect_uri:url.origin+'/api/oauth/'+name+'/callback',response_type:'code',scope:p.scope,state,...p.extra});
+  if(verifier){auth.searchParams.set('code_challenge',b64u(await crypto.subtle.digest('SHA-256',encoder.encode(verifier))));auth.searchParams.set('code_challenge_method','S256');}
+  return new Response(null,{status:302,headers:{Location:auth.href,'Cache-Control':'no-store'}});
+}
+// The provider redirect is cross-site, so the Strict session cookie is absent here; link mode re-checks the session saved in the state.
+async function oauthCallback(env,name,url){
+  const p=providers[name];if(!configured(env).includes(name))return home('sso_error=unavailable');
+  const state=url.searchParams.get('state'),code=url.searchParams.get('code');
+  if(!/^[A-Za-z0-9_-]{43}$/.test(state??''))return home('sso_error=expired');
+  const row=await env.DB.prepare('DELETE FROM kafra_oauth_states WHERE state_hash=? AND provider=? AND expires_at>? RETURNING mode,username,session_hash,verifier').bind(await sha(state),name,Date.now()).first();
+  if(!row)return home('sso_error=expired');
+  if(!code||code.length>2048)return home('sso_error=cancelled');
+  let identity;
+  try{
+    const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:url.origin+'/api/oauth/'+name+'/callback',client_id:p.id(env),client_secret:p.secret(env)});
+    if(row.verifier)form.set('code_verifier',row.verifier);
+    const response=await fetch(p.token,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Accept:'application/json'},body:form,signal:AbortSignal.timeout(5000)});
+    const grant=response.ok?await response.json():null;if(typeof grant?.access_token!=='string')throw new Error('token');
+    identity=await p.profile(grant.access_token);
+  }catch{return home('sso_error=provider');}
+  if(row.mode==='link'){
+    const user=await sessionUser(env,row.session_hash);if(!user||user.username!==row.username)return home('sso_error=signin_first');
+    const taken=await env.DB.prepare('SELECT username FROM kafra_identities WHERE provider=? AND subject=?').bind(name,identity.subject).first();
+    if(taken&&taken.username!==user.username)return home('sso_error=already_linked');
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM kafra_identities WHERE provider=? AND username=?').bind(name,user.username),
+      env.DB.prepare('INSERT OR REPLACE INTO kafra_identities (provider,subject,username,label,linked_at) VALUES (?,?,?,?,?)').bind(name,identity.subject,user.username,identity.label,Date.now())
+    ]);
+    return home('linked='+name);
+  }
+  const link=await env.DB.prepare('SELECT username FROM kafra_identities WHERE provider=? AND subject=?').bind(name,identity.subject).first();
+  const account=link?await accountVerifier(env,link.username):null;if(!account)return home('sso_error=not_linked');
+  return home('signed_in',{'Set-Cookie':await createSession(env,link.username,account.verifier)});
 }
 async function body(request,limit=2048){
   if(!request.headers.get('Content-Type')?.startsWith('application/json'))throw new Error('body');
@@ -59,11 +137,10 @@ function gateUrl(value,env){
 }
 function httpsUrl(value){let url;try{url=new URL(value);}catch{return null;}return url.protocol==='https:'&&!url.username&&!url.password&&value.length<=500?url.href:null;}
 const product=row=>({id:row.id,name:row.name,kafra:!!row.kafra,moro:!!row.moro});
-// The env-configured gate is the Super Admin's own server; it is listed only once configured.
+// The env-configured gate is the Super Admin's own server (Ragna Next); it is always listed, and says so until its gate is configured.
 async function visibleServers(user,env){
   if(user.role==='server_owner')return (await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers WHERE id=?').bind(user.serverId).all()).results.map(product);
-  const own=env.KAFRA_GATE_URL?[{id:'default',name:env.KAFRA_GATE_NAME??'Main server',kafra:true,moro:false}]:[];
-  return [...own,...(await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers ORDER BY name').all()).results.map(product)];
+  return [{id:'default',name:env.KAFRA_GATE_NAME||'Main server',kafra:true,moro:false},...(await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers ORDER BY name').all()).results.map(product)];
 }
 async function serverRow(user,id,env){
   if(!serverId.test(id??'')||(user.role==='server_owner'&&user.serverId!==id))return null;
@@ -158,6 +235,7 @@ async function adminRoutes(request,env,path){
     if(!serverId.test(data.id??''))return json({error:'invalid_id'},400);
     await env.DB.batch([
       env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE username IN (SELECT username FROM kafra_owners WHERE server_id=?)').bind(data.id),
+      env.DB.prepare('DELETE FROM kafra_identities WHERE username IN (SELECT username FROM kafra_owners WHERE server_id=?)').bind(data.id),
       ...['kafra_owners','moro_builds','moro_devices','moro_crashes'].map(table=>env.DB.prepare('DELETE FROM '+table+' WHERE server_id=?').bind(data.id)),
       env.DB.prepare('DELETE FROM kafra_servers WHERE id=?').bind(data.id)
     ]);
@@ -189,6 +267,7 @@ async function adminRoutes(request,env,path){
     if(typeof data.username!=='string'||!ownerName.test(data.username))return json({error:'invalid_username'},400);
     await env.DB.batch([
       env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE username=?').bind(data.username),
+      env.DB.prepare('DELETE FROM kafra_identities WHERE username=?').bind(data.username),
       env.DB.prepare('DELETE FROM kafra_owners WHERE username=?').bind(data.username)
     ]);
     return json({ok:true});
@@ -222,17 +301,22 @@ export async function adminApi(request,env){
       if(owner&&equal(actual,expected)){verifier=await ownerVersion(env,owner);role='server_owner';}
     }
     if(!verifier)return json({error:'invalid_credentials'},401);
-    const value=token();const now=Date.now();
-    await env.DB.batch([
-      env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE expires_at<?').bind(now),
-      env.DB.prepare('DELETE FROM kafra_admin_attempts WHERE expires_at<?').bind(now),
-      env.DB.prepare('INSERT INTO kafra_admin_sessions (token_hash,username,verifier_version,expires_at) VALUES (?,?,?,?)')
-        .bind(await sha(value),data.username,verifier,now+ttl)
-    ]);
-    return json({username:data.username,role},200,{'Set-Cookie':cookieName+'='+value+'; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Strict'});
+    return json({username:data.username,role},200,{'Set-Cookie':await createSession(env,data.username,verifier)});
   }
+  const oauth=path.match(/^\/api\/oauth\/(google|discord)\/(start|callback)$/);
+  if(oauth&&request.method==='GET')return oauth[2]==='start'?oauthStart(request,env,oauth[1],url):oauthCallback(env,oauth[1],url);
+  if(path==='/api/providers'&&request.method==='GET')return json({providers:configured(env)});
   const user=await current(request,env);if(!user)return json({error:'unauthorized'},401);
-  if(path==='/api/me'&&request.method==='GET')return json({username:user.username,role:user.role,servers:await visibleServers(user,env)});
+  if(path==='/api/me'&&request.method==='GET'){
+    const identities=(await env.DB.prepare('SELECT provider,label,linked_at FROM kafra_identities WHERE username=?').bind(user.username).all()).results;
+    return json({username:user.username,role:user.role,servers:await visibleServers(user,env),providers:configured(env),
+      identities:identities.map(i=>({provider:i.provider,label:i.label,linkedAt:i.linked_at}))});
+  }
+  if(path==='/api/identities/unlink'&&request.method==='POST'){
+    let data;try{data=await body(request);}catch{return json({error:'invalid_request'},400);}
+    if(!Object.hasOwn(providers,data.provider??''))return json({error:'invalid_provider'},400);
+    await env.DB.prepare('DELETE FROM kafra_identities WHERE provider=? AND username=?').bind(data.provider,user.username).run();return json({ok:true});
+  }
   if(path==='/api/logout'&&request.method==='POST'){
     await env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE token_hash=?').bind(await sha(cookie(request))).run();
     return json({ok:true},200,{'Set-Cookie':cookieName+'=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict'});

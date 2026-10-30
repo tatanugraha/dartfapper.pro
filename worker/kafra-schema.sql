@@ -63,3 +63,22 @@ CREATE TABLE IF NOT EXISTS moro_crashes (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS moro_crashes_server ON moro_crashes(server_id, id);
+-- Google/Discord sign-in. Users link providers themselves from Settings; SSO never creates accounts.
+CREATE TABLE IF NOT EXISTS kafra_identities (
+  provider TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  username TEXT NOT NULL,
+  label TEXT,
+  linked_at INTEGER NOT NULL,
+  PRIMARY KEY (provider, subject),
+  UNIQUE (provider, username)
+);
+CREATE TABLE IF NOT EXISTS kafra_oauth_states (
+  state_hash TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  username TEXT,
+  session_hash TEXT,
+  verifier TEXT,
+  expires_at INTEGER NOT NULL
+);

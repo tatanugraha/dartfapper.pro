@@ -8,8 +8,8 @@ import {localD1} from './local-d1.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const secretRoot=process.argv[2];if(!secretRoot)throw new Error('Private credentials directory required');
 const secrets=JSON.parse(await readFile(join(secretRoot,'worker-secrets.json'),'utf8'));
-const {KAFRA_ADMIN_USER}=JSON.parse(await readFile(join(root,'worker/wrangler.kafra.jsonc'),'utf8')).vars;
-const DB=localD1(await readFile(join(root,'worker/kafra-schema.sql'),'utf8'));
+const {vars}=JSON.parse(await readFile(join(root,'worker/wrangler.kafra.jsonc'),'utf8'));
+const DB=localD1((await Promise.all(['kafra-schema.sql','kafra-seed.sql'].map(file=>readFile(join(root,'worker',file),'utf8')))).join('\n'));
 const assetRoot=join(root,'kafra');
 const types={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml','.ttf':'font/ttf'};
 const ASSETS={async fetch(request){const path=new URL(request.url).pathname;const name=path==='/'?'index.html':path.slice(1);
@@ -19,7 +19,7 @@ const ASSETS={async fetch(request){const path=new URL(request.url).pathname;cons
 const client=process.argv[3];
 const server=createServer(async(req,res)=>{
   try{
-    const env={...secrets,KAFRA_ADMIN_USER,DB,ASSETS,KAFRA_DEV_LOCAL:'1'};
+    const env={...vars,...secrets,DB,ASSETS,KAFRA_DEV_LOCAL:'1'};
     let activeClient=client;
     try{activeClient=(await readFile(join(secretRoot,'preview-client.txt'),'utf8')).trim();}catch{}
     if(activeClient){try{

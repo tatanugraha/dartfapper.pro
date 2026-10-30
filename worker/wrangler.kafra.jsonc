@@ -3,6 +3,6 @@
   "main": "src/kafra-entry.js",
   "compatibility_date": "2026-10-26",
   "assets": {"directory": "../kafra", "binding": "ASSETS", "run_worker_first": true},
-  "vars": {"KAFRA_ADMIN_USER": "tatanugraha"},
+  "vars": {"KAFRA_ADMIN_USER": "tatanugraha", "KAFRA_GATE_NAME": "Ragna Next", "DISCORD_CLIENT_ID": "1376624589630738492", "GOOGLE_CLIENT_ID": ""},
   "d1_databases": [{"binding":"DB", "database_name":"dartfapper-auth", "database_id":"924b79bc-86bb-485d-968b-0f143ec40667"}]
 }
