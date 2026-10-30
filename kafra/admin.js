@@ -10,7 +10,7 @@ const returned=Object.fromEntries(new URLSearchParams(location.hash.slice(1)));i
 async function api(path,options={}){
   const response=await fetch('/api/'+path,{...options,credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json',...options.headers}});
   let data;try{data=await response.json();}catch{throw new Error('Invalid server response.');}
-  if(!response.ok){if(response.status===401&&!path.startsWith('login'))showLogin();throw new Error(errors[data.error]??'Request failed. Please try again.');}return data;
+  if(!response.ok){if(response.status===401&&!path.startsWith('login'))showLogin();throw new Error((errors[data.error]??'Request failed. Please try again.')+(data.detail?' ('+data.detail+')':''));}return data;
 }
 const post=(path,data)=>api(path,{method:'POST',body:JSON.stringify(data)});
 const views=['dashboard','moro','admin','settings','empty-view'];

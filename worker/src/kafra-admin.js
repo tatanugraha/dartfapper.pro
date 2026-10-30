@@ -148,6 +148,8 @@ async function unseal(env,sealed,id){
   const [iv,data]=sealed.split(':');
   return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unhex(iv),additionalData:encoder.encode(id)},await dataKey(env),unhex(data)));
 }
+// Why the gate call failed (HTTP status or fetch error), shown to the signed-in owner; never includes the key.
+const unavailable=reason=>json({error:'gate_unavailable',detail:String(typeof reason==='string'?reason:(reason?.name??'Error')+': '+(reason?.message??'')).slice(0,160)},502);
 function gateUrl(value,env){
   let gate;try{gate=new URL(value);}catch{return null;}
   if(gate.username||gate.password||gate.pathname!=='/'||gate.search||gate.hash||
@@ -383,12 +385,12 @@ export async function adminApi(request,env){
       const response=await fetch(new URL('/internal/owner/'+action,gate),init);
       if(response.status===404&&(action==='kick'||action==='unban'))return json({error:action==='kick'?'session_closed':'not_banned'},404);
       if(response.status===400)return json({error:action==='policy'?'invalid_limits':'invalid_request'},400);
-      if(!response.ok)return json({error:'gate_unavailable'},502);
+      if(!response.ok)return unavailable('HTTP '+response.status);
       const result=JSON.parse((await response.text()).slice(0,131072));
       if(action==='policy')return json({maxPerDevice:result.maxPerDevice,maxPerNetwork:result.maxPerNetwork,networkPrefix:result.networkPrefix});
       if(action==='bans')return json({bans:(Array.isArray(result.bans)?result.bans:[]).slice(0,500).map(b=>({deviceId:String(b.deviceId),reason:String(b.reason??''),bannedAt:b.bannedAt??null}))});
       return json({ok:true,endedSessions:result.endedSessions??(action==='kick'?1:0)});
-    }catch{return json({error:'gate_unavailable'},502);}
+    }catch(error){return unavailable(error);}
   }
   if(request.method!=='GET'||!['/api/sessions','/api/modules'].includes(path))return json({error:'not_found'},404);
   let target;
@@ -405,10 +407,11 @@ export async function adminApi(request,env){
   }
   try{
     const response=await fetch(upstream,{headers:{Authorization:'Bearer '+target.key},redirect:'error',signal:AbortSignal.timeout(4000)});
-    if(!response.ok)return json({error:response.status===404&&path==='/api/modules'?'session_closed':'gate_unavailable'},response.status===404&&path==='/api/modules'?404:502);
+    if(response.status===404&&path==='/api/modules')return json({error:'session_closed'},404);
+    if(!response.ok)return unavailable('HTTP '+response.status);
     const reader=response.body.getReader();let size=0;const chunks=[];
     for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>131072){await reader.cancel();throw new Error('response_size');}chunks.push(value);}
     const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
     return json(JSON.parse(new TextDecoder().decode(bytes)));
-  }catch{return json({error:'gate_unavailable'},502);}
+  }catch(error){return unavailable(error);}
 }
