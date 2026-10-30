@@ -82,3 +82,9 @@ CREATE TABLE IF NOT EXISTS kafra_oauth_states (
   verifier TEXT,
   expires_at INTEGER NOT NULL
 );
+-- Members sign up with Google or Discord (no password). They see no server until the Super Admin invites them as an owner.
+CREATE TABLE IF NOT EXISTS kafra_members (
+  username TEXT PRIMARY KEY,
+  name TEXT,
+  created_at INTEGER NOT NULL
+);

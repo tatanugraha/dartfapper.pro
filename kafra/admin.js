@@ -1,9 +1,9 @@
 // Keep the admin panel and HttpOnly cookie on the Worker origin, not GitHub Pages.
 if(location.hostname==='dartfapper.pro'||location.hostname==='www.dartfapper.pro')location.replace('https://kafra-guard-owner.tatagpriyanugraha.workers.dev/');
 const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer;
-const roles={super_admin:'Super Admin',server_owner:'Server Owner'};
-const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.'};
-const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'No account is linked to that login yet. Sign in with your password and link it in Settings.'};
+const roles={super_admin:'Super Admin',server_owner:'Server Owner',member:'Member'};
+const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
+const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'That account is no longer available. Please try again.'};
 const providerNames={google:'Google',discord:'Discord'};
 // OAuth callbacks come back as /#sso_error=…, /#linked=… or /#signed_in; read once, then clear the hash.
 const returned=Object.fromEntries(new URLSearchParams(location.hash.slice(1)));if(location.hash)history.replaceState(null,'',location.pathname);
@@ -14,7 +14,7 @@ async function api(path,options={}){
 }
 const post=(path,data)=>api(path,{method:'POST',body:JSON.stringify(data)});
 const views=['dashboard','moro','admin','settings','empty-view'];
-function showLogin(){user=null;loadProviders();for(const id of [...views,'account','side-nav','side-label'])$(id).hidden=true;$('login-section').hidden=false;$('side-role').textContent='Restricted access';$('side-note').textContent='Invite-only accounts.';clearInterval(timer);}
+function showLogin(){user=null;loadProviders();for(const id of [...views,'account','side-nav','side-label'])$(id).hidden=true;$('login-section').hidden=false;$('side-role').textContent='Not signed in';$('side-note').textContent='One account for everything on dartfapper.';clearInterval(timer);}
 function applyAccess(me){
   user=me;renderSettings(me);servers=me.servers;const kafra=servers.filter(s=>s.kafra),moro=servers.filter(s=>s.moro);
   $('nav-kafra').hidden=!kafra.length;$('nav-moro').hidden=!moro.length;$('nav-admin').hidden=me.role!=='super_admin';
@@ -22,8 +22,8 @@ function applyAccess(me){
 }
 function showDashboard(me){
   $('login-section').hidden=true;$('account').hidden=false;$('side-nav').hidden=false;$('side-label').hidden=false;
-  $('username').textContent=me.username+' / '+(roles[me.role]??me.role);$('side-role').textContent=roles[me.role]??me.role;
-  $('side-note').textContent=me.role==='super_admin'?'All servers and owner accounts.':'Only your server’s products.';
+  $('username').textContent=(me.name??me.username)+' / '+(roles[me.role]??me.role);$('side-role').textContent=roles[me.role]??me.role;
+  $('side-note').textContent=me.role==='super_admin'?'All servers and owner accounts.':me.role==='member'?'Your dartfapper account.':'Only your server’s products.';
   applyAccess(me);
   view(!$('nav-kafra').hidden?'dashboard':!$('nav-moro').hidden?'moro':me.role==='super_admin'?'admin':'empty-view');
 }
@@ -42,7 +42,9 @@ function view(name){
   else if(name==='settings')api('me').then(applyAccess).catch(error=>{$('settings-message').textContent=error.message;});
 }
 async function loadProviders(){
-  try{const {providers}=await api('providers');$('sso').hidden=!providers.length;for(const name of Object.keys(providerNames))$('sso-'+name).hidden=!providers.includes(name);}catch{$('sso').hidden=true;}
+  // Both buttons always show; one not set up on the Worker yet is greyed out.
+  let providers=[];try{({providers}=await api('providers'));}catch{}
+  for(const name of Object.keys(providerNames)){const button=$('sso-'+name),off=!providers.includes(name);button.classList.toggle('off',off);button.setAttribute('aria-disabled',String(off));button.title=off?providerNames[name]+' sign-in is coming soon':'';}
 }
 function renderSettings(me){
   for(const row of document.querySelectorAll('[data-connection]')){

@@ -16,6 +16,7 @@ const superUser=env=>env.KAFRA_ADMIN_USER??'admin';
 const superVersion=env=>sha(env.KAFRA_ADMIN_HASH+'|'+env.KAFRA_ADMIN_PEPPER+'|'+superUser(env));
 // Owner sessions die when the password, pepper or assigned server changes.
 const ownerVersion=(env,owner)=>sha(owner.password_hash+'|'+env.KAFRA_ADMIN_PEPPER+'|'+owner.username+'|'+owner.server_id);
+const memberVersion=(env,member)=>sha('member|'+member.username+'|'+member.created_at+'|'+env.KAFRA_ADMIN_PEPPER);
 const ownerName=/^[a-z0-9][a-z0-9_.-]{2,31}$/,serverId=/^[a-f0-9]{16}$/,dummyHash='0'.repeat(32)+':'+'0'.repeat(64);
 // Printable text (tabs/newlines allowed) within a length bound, or null.
 const text=(value,max)=>typeof value==='string'&&value.length>=1&&value.length<=max&&!/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)?value:null;
@@ -24,8 +25,9 @@ async function sessionUser(env,tokenHash){
   if(!row)return null;
   if(row.username===superUser(env))return equal(row.verifier_version,await superVersion(env))?{username:row.username,role:'super_admin'}:null;
   const owner=await env.DB.prepare('SELECT username,password_hash,server_id FROM kafra_owners WHERE username=?').bind(row.username).first();
-  if(!owner||!equal(row.verifier_version,await ownerVersion(env,owner)))return null;
-  return {username:owner.username,role:'server_owner',serverId:owner.server_id};
+  if(owner)return equal(row.verifier_version,await ownerVersion(env,owner))?{username:owner.username,role:'server_owner',serverId:owner.server_id}:null;
+  const member=await env.DB.prepare('SELECT username,name,created_at FROM kafra_members WHERE username=?').bind(row.username).first();
+  return member&&equal(row.verifier_version,await memberVersion(env,member))?{username:member.username,role:'member',name:member.name}:null;
 }
 async function current(request,env){
   const value=cookie(request);if(!/^[A-Za-z0-9_-]{43}$/.test(value??''))return null;
@@ -44,7 +46,9 @@ async function createSession(env,username,verifier){
 async function accountVerifier(env,username){
   if(username===superUser(env))return env.KAFRA_ADMIN_HASH&&env.KAFRA_ADMIN_PEPPER?{role:'super_admin',verifier:await superVersion(env)}:null;
   const owner=await env.DB.prepare('SELECT username,password_hash,server_id FROM kafra_owners WHERE username=?').bind(username).first();
-  return owner?{role:'server_owner',verifier:await ownerVersion(env,owner)}:null;
+  if(owner)return {role:'server_owner',verifier:await ownerVersion(env,owner)};
+  const member=await env.DB.prepare('SELECT username,created_at FROM kafra_members WHERE username=?').bind(username).first();
+  return member?{role:'member',verifier:await memberVersion(env,member)}:null;
 }
 const b64u=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const home=(fragment,headers={})=>new Response(null,{status:302,headers:{Location:'/#'+fragment,'Cache-Control':'no-store',...headers}});
@@ -103,8 +107,16 @@ async function oauthCallback(env,name,url){
     return home('linked='+name);
   }
   const link=await env.DB.prepare('SELECT username FROM kafra_identities WHERE provider=? AND subject=?').bind(name,identity.subject).first();
-  const account=link?await accountVerifier(env,link.username):null;if(!account)return home('sso_error=not_linked');
-  return home('signed_in',{'Set-Cookie':await createSession(env,link.username,account.verifier)});
+  if(link){const account=await accountVerifier(env,link.username);if(!account)return home('sso_error=not_linked');
+    return home('signed_in',{'Set-Cookie':await createSession(env,link.username,account.verifier)});}
+  // No account yet: Google/Discord sign-up creates a member with no server access.
+  if(!env.KAFRA_ADMIN_PEPPER)return home('sso_error=unavailable');
+  const member={username:'member-'+hex(crypto.getRandomValues(new Uint8Array(6))),created_at:Date.now()};
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO kafra_members (username,name,created_at) VALUES (?,?,?)').bind(member.username,identity.label,member.created_at),
+    env.DB.prepare('INSERT INTO kafra_identities (provider,subject,username,label,linked_at) VALUES (?,?,?,?,?)').bind(name,identity.subject,member.username,identity.label,member.created_at)
+  ]);
+  return home('signed_in',{'Set-Cookie':await createSession(env,member.username,await memberVersion(env,member))});
 }
 async function body(request,limit=2048){
   if(!request.headers.get('Content-Type')?.startsWith('application/json'))throw new Error('body');
@@ -139,11 +151,12 @@ function httpsUrl(value){let url;try{url=new URL(value);}catch{return null;}retu
 const product=row=>({id:row.id,name:row.name,kafra:!!row.kafra,moro:!!row.moro});
 // The env-configured gate is the Super Admin's own server (Ragna Next); it is always listed, and says so until its gate is configured.
 async function visibleServers(user,env){
+  if(user.role==='member')return [];
   if(user.role==='server_owner')return (await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers WHERE id=?').bind(user.serverId).all()).results.map(product);
   return [{id:'default',name:env.KAFRA_GATE_NAME||'Main server',kafra:true,moro:false},...(await env.DB.prepare('SELECT id,name,kafra,moro FROM kafra_servers ORDER BY name').all()).results.map(product)];
 }
 async function serverRow(user,id,env){
-  if(!serverId.test(id??'')||(user.role==='server_owner'&&user.serverId!==id))return null;
+  if(!serverId.test(id??'')||(user.role!=='super_admin'&&user.serverId!==id))return null;
   return env.DB.prepare('SELECT * FROM kafra_servers WHERE id=?').bind(id).first();
 }
 // null = not visible to this user (or Kafra Guard not enabled); {} = visible but gate not configured.
@@ -254,7 +267,7 @@ async function adminRoutes(request,env,path){
     await env.DB.prepare('DELETE FROM moro_builds WHERE id=?').bind(data.id).run();return json({ok:true});
   }
   if(path==='/api/admin/owners'){
-    if(typeof data.username!=='string'||!ownerName.test(data.username)||equal(data.username,superUser(env)))return json({error:'invalid_username'},400);
+    if(typeof data.username!=='string'||!ownerName.test(data.username)||data.username.startsWith('member-')||equal(data.username,superUser(env)))return json({error:'invalid_username'},400);
     if(typeof data.password!=='string'||data.password.length<12||data.password.length>256)return json({error:'weak_password'},400);
     if(!serverId.test(data.serverId??'')||!await env.DB.prepare('SELECT id FROM kafra_servers WHERE id=?').bind(data.serverId).first())return json({error:'invalid_server'},400);
     const salt=hex(crypto.getRandomValues(new Uint8Array(16)));
@@ -309,12 +322,14 @@ export async function adminApi(request,env){
   const user=await current(request,env);if(!user)return json({error:'unauthorized'},401);
   if(path==='/api/me'&&request.method==='GET'){
     const identities=(await env.DB.prepare('SELECT provider,label,linked_at FROM kafra_identities WHERE username=?').bind(user.username).all()).results;
-    return json({username:user.username,role:user.role,servers:await visibleServers(user,env),providers:configured(env),
+    return json({username:user.username,name:user.name??user.username,role:user.role,servers:await visibleServers(user,env),providers:configured(env),
       identities:identities.map(i=>({provider:i.provider,label:i.label,linkedAt:i.linked_at}))});
   }
   if(path==='/api/identities/unlink'&&request.method==='POST'){
     let data;try{data=await body(request);}catch{return json({error:'invalid_request'},400);}
     if(!Object.hasOwn(providers,data.provider??''))return json({error:'invalid_provider'},400);
+    // A member has no password, so the last linked login cannot be removed.
+    if(user.role==='member'&&(await env.DB.prepare('SELECT COUNT(*) AS n FROM kafra_identities WHERE username=? AND provider<>?').bind(user.username,data.provider).first()).n===0)return json({error:'last_sign_in'},400);
     await env.DB.prepare('DELETE FROM kafra_identities WHERE provider=? AND username=?').bind(data.provider,user.username).run();return json({ok:true});
   }
   if(path==='/api/logout'&&request.method==='POST'){

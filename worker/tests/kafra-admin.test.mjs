@@ -102,10 +102,9 @@ async function oauth(env,provider,mode,cookie){
   const location=new URL(start.headers.get('Location'));
   const callback=await adminApi(request('oauth/'+provider+'/callback?code=abc&state='+location.searchParams.get('state')),env);
   return {start:location,state:location.searchParams.get('state'),location:callback.headers.get('Location'),cookie:callback.headers.get('Set-Cookie')?.split(';')[0]};}
-test('Google/Discord sign-in only works for accounts that linked it in Settings',async t=>{const env={...await fixture(t),...sso},{owner}=await ownerSetup(env);
+test('Google/Discord sign-in uses the account that linked it in Settings',async t=>{const env={...await fixture(t),...sso},{owner}=await ownerSetup(env);
   const profile={current:{sub:'google-123',email:'owner@gmail.test',email_verified:true}},seen=fakeProviders(t,profile);
   assert.deepEqual((await (await adminApi(request('providers'),env)).json()).providers,['google','discord']);
-  assert.equal((await oauth(env,'google','login')).location,'/#sso_error=not_linked');
   const linked=await oauth(env,'google','link',owner);assert.equal(linked.location,'/#linked=google');
   assert.ok(linked.start.searchParams.get('code_challenge'));assert.ok(seen.at(-1).code_verifier);assert.equal(seen.at(-1).redirect_uri,'https://guard.example.test/api/oauth/google/callback');
   const me=await (await adminApi(request('me',undefined,owner),env)).json();assert.deepEqual(me.identities.map(i=>[i.provider,i.label]),[['google','owner@gmail.test']]);
@@ -118,9 +117,22 @@ test('Google/Discord sign-in only works for accounts that linked it in Settings'
   assert.equal((await (await adminApi(request('me',undefined,(await oauth(env,'discord','login')).cookie),env)).json()).role,'super_admin');
   assert.equal((await oauth(env,'discord','link')).location,'/#sso_error=signin_first');
   assert.equal((await adminApi(request('identities/unlink',{provider:'discord'},admin),env)).status,200);
-  assert.equal((await oauth(env,'discord','login')).location,'/#sso_error=not_linked');
+  assert.equal((await (await adminApi(request('me',undefined,(await oauth(env,'discord','login')).cookie),env)).json()).role,'member');
   await adminApi(request('admin/owners/delete',{username:'sov.owner'},admin),env);
-  profile.current={sub:'google-123',email:'owner@gmail.test',email_verified:true};assert.equal((await oauth(env,'google','login')).location,'/#sso_error=not_linked');
+  profile.current={sub:'google-123',email:'owner@gmail.test',email_verified:true};
+  assert.equal((await (await adminApi(request('me',undefined,(await oauth(env,'google','login')).cookie),env)).json()).role,'member');
+});
+test('Google/Discord sign-up creates a member who sees no server',async t=>{const env={...await fixture(t),...sso},{own}=await ownerSetup(env);
+  const profile={current:{id:'discord-7',username:'newbie'}};fakeProviders(t,profile);
+  const first=await oauth(env,'discord','login');assert.equal(first.location,'/#signed_in');
+  const me=await (await adminApi(request('me',undefined,first.cookie),env)).json();
+  assert.equal(me.role,'member');assert.equal(me.name,'newbie');assert.match(me.username,/^member-[a-f0-9]{12}$/);assert.deepEqual(me.servers,[]);
+  assert.equal((await (await adminApi(request('me',undefined,(await oauth(env,'discord','login')).cookie),env)).json()).username,me.username);
+  for(const path of ['sessions','sessions?server='+own,'modules?server=default','moro?server='+own])assert.equal((await adminApi(request(path,undefined,first.cookie),env)).status,404);
+  assert.equal((await adminApi(request('admin/servers',undefined,first.cookie),env)).status,403);
+  assert.equal((await adminApi(request('identities/unlink',{provider:'discord'},first.cookie),env)).status,400);
+  const admin=await login(env);
+  assert.equal((await adminApi(request('admin/owners',{username:me.username,password:'another-long-password',serverId:own},admin),env)).status,400);
 });
 test('SSO buttons stay off until a provider is configured',async t=>{const env=await fixture(t);
   assert.deepEqual((await (await adminApi(request('providers'),env)).json()).providers,[]);

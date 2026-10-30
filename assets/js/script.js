@@ -155,7 +155,6 @@ function applyStaticText() {
   $$("[data-i18n]").forEach((el) => { el.textContent = ui(el.dataset.i18n); });
   $$("[data-i18n-html]").forEach((el) => { el.innerHTML = ui(el.dataset.i18nHtml); });
   $$("[data-lang-btn]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.langBtn === lang)));
-  $$("[data-account]").forEach((b) => (b.title = ui("cta.logout")));
   const servers = SERVERS.filter((s) => s.kind !== "client");
   $$("[data-stat='servers']").forEach((el) => (el.textContent = servers.length));
   $$("[data-stat='online']").forEach((el) => (el.textContent = servers.filter((s) => s.status === "online").length));
@@ -214,54 +213,6 @@ $$("[data-gig]").forEach((a) => {
 });
 if (!window.GIG_URL) $("#service").hidden = true;
 $("[data-year]").textContent = new Date().getFullYear();
-
-/* ---------- account (Discord login via dartfapper-api) ---------- */
-const API_URL = window.API_URL || "";
-const TOKEN_KEY = "authToken";
-const store = {
-  get: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-  set: (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch {} },
-};
-
-function showAccount(user) {
-  $$("[data-login]").forEach((a) => (a.hidden = !!user));
-  $$("[data-account]").forEach((b) => (b.hidden = !user));
-  if (!user) return;
-  $("[data-account-name]").textContent = user.displayName;
-  if (user.avatarUrl) $("[data-account-avatar]").src = user.avatarUrl;
-}
-
-async function initAccount() {
-  if (!API_URL) return;
-  $$("[data-login]").forEach((a) => (a.href = `${API_URL}/auth/discord`));
-
-  // the API sends the player back here with #auth=<token> (or #auth_error=...)
-  const hash = new URLSearchParams(location.hash.slice(1));
-  if (hash.has("auth") || hash.has("auth_error")) {
-    if (hash.get("auth")) store.set(hash.get("auth"));
-    history.replaceState(null, "", location.pathname + location.search);
-  }
-
-  const token = store.get();
-  if (!token) return showAccount(null);
-  try {
-    const res = await fetch(`${API_URL}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) store.set(null);
-    showAccount(res.ok ? await res.json() : null);
-  } catch {
-    showAccount(null);
-  }
-}
-
-$$("[data-account]").forEach((b) => b.addEventListener("click", async () => {
-  if (!confirm(ui("account.confirmLogout"))) return;
-  const token = store.get();
-  store.set(null);
-  showAccount(null);
-  if (token) fetch(`${API_URL}/api/logout`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-}));
-
-initAccount();
 
 /* ---------- header & back-to-top ---------- */
 const header = $("[data-header]");

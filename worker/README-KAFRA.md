@@ -80,8 +80,10 @@ node worker/tools/add-kafra-data-key.mjs E:\gameshield\.local\kafra-owner-admin
 
 ## Sign-in Google / Discord (SSO)
 
-SSO tidak pernah membuat akun. User login dengan password dulu, lalu menautkan Google/Discord di **Settings → Connected accounts**.
-Tombol SSO di halaman login baru muncul setelah provider dikonfigurasi.
+Tombol "Log in" di header dartfapper.pro membuka halaman login ini (login global). Username/password untuk akun yang
+dibuat Super Admin; di bawahnya Google/Discord. Google/Discord yang belum tertaut otomatis membuat akun **Member**
+(`member-xxxxxxxxxxxx`, tanpa password, tidak melihat server apa pun). Owner/Super Admin menautkan Google/Discord di
+**Settings → Connected accounts** agar SSO masuk ke akun mereka. Tombol provider yang belum dikonfigurasi tampil abu-abu.
 
 - Google: buat OAuth client (Web) di Google Cloud, redirect URI
   `https://kafra-guard-owner.tatagpriyanugraha.workers.dev/api/oauth/google/callback`. Isi `GOOGLE_CLIENT_ID` di vars,
