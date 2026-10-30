@@ -252,6 +252,7 @@ function submitter(id,send,reset=true){$(id).addEventListener('submit',async eve
 submitter('server-form',()=>post('admin/servers',{name:$('server-name').value}));
 submitter('owner-form',()=>{const password=$('owner-pass').value;$('owner-pass').value='';return post('admin/owners',{serverId:$('owner-server').value,username:$('owner-user').value.trim(),password});});
 submitter('kafra-form',()=>post('admin/servers/kafra',{id:managed.id,enabled:$('kafra-enabled').checked,gateUrl:$('kafra-gate').value,gateKey:$('kafra-key').value}),false);
+$('copy-key').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('key-value').textContent.trim());$('copy-key').textContent='Copied ✓';}catch{$('copy-key').textContent='Select the code and press Ctrl+C';}});
 submitter('moro-form',async()=>{const result=await post('admin/servers/moro',{id:managed.id,enabled:$('moro-enabled').checked,plan:$('moro-plan-input').value,expiresAt:$('moro-expires-input').value,rotateKey:$('moro-rotate').checked});
   $('key-output').hidden=!result.ingestKey;$('key-value').textContent=result.ingestKey??'';if(result.ingestKey)$('key-output').scrollIntoView({behavior:'smooth',block:'nearest'});},false);
 submitter('build-form',()=>post('admin/moro/builds',{serverId:managed.id,version:$('build-version').value,url:$('build-url').value,notes:$('build-notes').value}));
