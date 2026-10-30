@@ -231,18 +231,52 @@ async function moroServerReport(env,server,data){
     ...rows.map(r=>env.DB.prepare('INSERT OR REPLACE INTO moro_online (server_id,char_id,account_id,userid,char_name,base_level,ip,reported_at) VALUES (?,?,?,?,?,?,?,?)').bind(server.id,...r,now))]);
   return json({ok:true,players:rows.length});
 }
+// OTA (live code update) per Mobile RO server. The agent on the update host (worker/tools/moro-ota-agent.py) reports
+// what each channel serves and polls for one pending action. Only promote is offered here: it copies the canary bundle,
+// already signed on the PC. Rollback needs a new signature, so it stays a PC command (ota-admin.ps1).
+const moroOtaSql="CREATE TABLE IF NOT EXISTS moro_ota (server_id TEXT PRIMARY KEY, state TEXT NOT NULL DEFAULT '{}', reported_at INTEGER NOT NULL DEFAULT 0, pending_id TEXT, pending_action TEXT, pending_by TEXT, pending_at INTEGER, result TEXT)";
+let moroOtaReady=false;
+async function ensureMoroOta(env){if(!moroOtaReady){await env.DB.prepare(moroOtaSql).run();moroOtaReady=true;}}
+function otaChannel(value){
+  if(!value||typeof value!=='object')return null;
+  const line=(v,max)=>typeof v==='string'?v.replace(/[\x00-\x1f\x7f]/g,'').slice(0,max):null;
+  return {version:Number.isSafeInteger(value.version)&&value.version>0?value.version:null,tag:line(value.tag,40),commit:line(value.commit,40),
+    builtAt:line(value.builtAt,40),dirty:value.dirty===true};
+}
+async function moroOtaReport(env,server,data){
+  await ensureMoroOta(env);const now=Date.now();
+  const state={production:otaChannel(data?.production),canary:otaChannel(data?.canary)};
+  const row=await env.DB.prepare('SELECT pending_id FROM moro_ota WHERE server_id=?').bind(server.id).first();
+  const done=data?.done&&typeof data.done==='object'&&row?.pending_id&&data.done.id===row.pending_id?data.done:null;
+  const result=done?JSON.stringify({ok:done.ok===true,message:typeof done.message==='string'?done.message.replace(/[\x00-\x1f\x7f]/g,' ').slice(0,300):'',at:now}):null;
+  await env.DB.prepare('INSERT INTO moro_ota (server_id,state,reported_at) VALUES (?,?,?) ON CONFLICT(server_id) DO UPDATE SET state=excluded.state,reported_at=excluded.reported_at')
+    .bind(server.id,JSON.stringify(state),now).run();
+  if(done)await env.DB.prepare('UPDATE moro_ota SET pending_id=NULL,pending_action=NULL,pending_by=NULL,pending_at=NULL,result=? WHERE server_id=?').bind(result,server.id).run();
+  const pending=done?null:await env.DB.prepare('SELECT pending_id AS id,pending_action AS action,pending_at AS at FROM moro_ota WHERE server_id=? AND pending_id IS NOT NULL').bind(server.id).first();
+  // A request the agent never picked up within 10 minutes is dropped rather than run late.
+  if(pending&&now-pending.at>10*60000){await env.DB.prepare('UPDATE moro_ota SET pending_id=NULL,pending_action=NULL,result=? WHERE server_id=?').bind(JSON.stringify({ok:false,message:'Expired before the update server picked it up',at:now}),server.id).run();return json({ok:true,action:null});}
+  return json({ok:true,action:pending?{id:pending.id,action:pending.action}:null});
+}
+async function moroOtaView(env,id){
+  await ensureMoroOta(env);const row=await env.DB.prepare('SELECT * FROM moro_ota WHERE server_id=?').bind(id).first();
+  if(!row)return {connected:false};
+  const parse=v=>{try{return v?JSON.parse(v):null;}catch{return null;}};
+  return {connected:Date.now()-row.reported_at<5*60000,reportedAt:row.reported_at,...parse(row.state),
+    pending:row.pending_id?{action:row.pending_action,by:row.pending_by,at:row.pending_at}:null,lastResult:parse(row.result)};
+}
 // Mobile RO app → Worker. Bearer ingest key per server; data is client-reported, like Kafra Guard module reports.
 async function ingest(request,env,path){
   if(path.startsWith('/api/ingest/moro/activity/'))return moroActivity(request,env,path.slice('/api/ingest/moro/activity/'.length));
-  const kind=path==='/api/ingest/moro/crash'?'crash':path==='/api/ingest/moro/heartbeat'?'heartbeat':path==='/api/ingest/moro/online'?'online':null;if(!kind)return json({error:'not_found'},404);
+  const kind=path==='/api/ingest/moro/crash'?'crash':path==='/api/ingest/moro/heartbeat'?'heartbeat':path==='/api/ingest/moro/online'?'online':path==='/api/ingest/moro/ota'?'ota':null;if(!kind)return json({error:'not_found'},404);
   const auth=request.headers.get('Authorization')??'',key=auth.startsWith('Bearer ')?auth.slice(7):'';
   if(!/^[A-Za-z0-9_-]{43}$/.test(key))return json({error:'unauthorized'},401);
   const server=await env.DB.prepare('SELECT id FROM kafra_servers WHERE moro=1 AND moro_key_hash=?').bind(await sha(key)).first();
   if(!server)return json({error:'unauthorized'},401);
   const minute=Math.floor(Date.now()/60000);
-  if(await bump(env,await sha('ingest|'+kind+'|'+server.id+'|'+minute),(minute+1)*60000)>({crash:60,online:20}[kind]??1200))return json({error:'rate_limited'},429,{'Retry-After':'60'});
+  if(await bump(env,await sha('ingest|'+kind+'|'+server.id+'|'+minute),(minute+1)*60000)>({crash:60,online:20,ota:20}[kind]??1200))return json({error:'rate_limited'},429,{'Retry-After':'60'});
   let data;try{data=await body(request,{crash:16384,online:196608}[kind]??1024);}catch{return json({error:'invalid_request'},400);}
   if(kind==='online')return moroServerReport(env,server,data);
+  if(kind==='ota')return moroOtaReport(env,server,data);
   const version=text(data.appVersion,32),os=text(data.os,32),now=Date.now();if(!version||!os)return json({error:'invalid_request'},400);
   if(kind==='heartbeat'){
     const device=text(data.deviceId,128);if(!device)return json({error:'invalid_request'},400);
@@ -272,7 +306,8 @@ async function moroDashboard(user,id,env){
     ensureMoroOnline(env).then(()=>q('SELECT char_id,account_id,userid,char_name,base_level,ip,reported_at FROM moro_online WHERE server_id=? AND reported_at>? ORDER BY char_name LIMIT 500',now-3*60000).all()),
     ensureMoroPlayers(env).then(()=>q("SELECT account_id,char_id,char_name,device,os,app_version,last_seen FROM moro_players WHERE server_id=? AND last_seen>? ORDER BY char_name='',char_name LIMIT 200",now-3*60000).all())
   ]);
-  return json({server:{id,name:row.name},license:{plan:row.moro_plan,expiresAt:row.moro_expires,active:!row.moro_expires||row.moro_expires>now},
+  const ota=await moroOtaView(env,id);
+  return json({server:{id,name:row.name},ota,license:{plan:row.moro_plan,expiresAt:row.moro_expires,active:!row.moro_expires||row.moro_expires>now},
     builds:builds.results.map(b=>({id:b.id,version:b.version,url:b.url,notes:b.notes,publishedAt:b.created_at})),
     inGame:inGame.results.map(p=>({charId:p.char_id,accountId:p.account_id,userid:p.userid,name:p.char_name,level:p.base_level,ip:p.ip,reportedAt:p.reported_at})),
     stats:{online:Math.max(online.n,inGame.results.length),devices24h:active.n,crashes24h:crashes.n,versions:versions.results},
@@ -334,6 +369,16 @@ async function adminRoutes(request,env,path){
     if(!version)return json({error:'invalid_version'},400);if(!url)return json({error:'invalid_build_url'},400);if(data.notes&&!notes)return json({error:'invalid_notes'},400);
     await env.DB.prepare('INSERT INTO moro_builds (server_id,version,url,notes,created_at) VALUES (?,?,?,?,?)').bind(data.serverId,version,url,notes,Date.now()).run();
     return json({ok:true},201);
+  }
+  if(path==='/api/admin/moro/ota'){
+    if(!serverId.test(data.serverId??'')||!await env.DB.prepare('SELECT id FROM kafra_servers WHERE id=? AND moro=1').bind(data.serverId).first())return json({error:'invalid_server'},400);
+    if(data.action!=='promote')return json({error:'invalid_action'},400);
+    const ota=await moroOtaView(env,data.serverId);
+    if(!ota.connected)return json({error:'ota_agent_offline'},409);
+    if(ota.pending)return json({error:'ota_busy'},409);
+    if(!ota.canary?.version||(ota.production?.version&&ota.canary.version<=ota.production.version))return json({error:'ota_nothing_to_promote'},409);
+    await env.DB.prepare('UPDATE moro_ota SET pending_id=?,pending_action=?,pending_by=?,pending_at=? WHERE server_id=?').bind(hex(crypto.getRandomValues(new Uint8Array(8))),'promote',superUser(env),Date.now(),data.serverId).run();
+    return json({ok:true});
   }
   if(path==='/api/admin/moro/builds/delete'){
     if(!Number.isSafeInteger(data.id))return json({error:'invalid_id'},400);
