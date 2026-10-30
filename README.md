@@ -1,6 +1,8 @@
 # dartfapper.pro
 
 Hub semua game buatan Tata. Static site di GitHub Pages, auto-update tiap push ke `main`.
+Owner Console (Kafra Guard & Mobile RO, Super Admin + Server Owner): `kafra/`, dengan Worker owner tersendiri.
+Lihat [worker/README-KAFRA.md](worker/README-KAFRA.md) untuk konfigurasi dan status deployment.
 Layout terinspirasi [Unigine](https://github.com/codewithsadee/unigine) (MIT).
 
 ## Struktur

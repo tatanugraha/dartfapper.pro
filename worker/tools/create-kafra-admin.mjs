@@ -1,0 +1,15 @@
+import {mkdir,writeFile,readFile} from 'node:fs/promises';
+import {randomBytes} from 'node:crypto';
+import {resolve,join,isAbsolute} from 'node:path';
+import {passwordHash} from '../src/kafra-admin.js';
+const target=process.argv[2];if(!target||!isAbsolute(target))throw new Error('Usage: node worker/tools/create-kafra-admin.mjs <absolute-private-output-directory>');
+const username=JSON.parse(await readFile(new URL('../wrangler.kafra.jsonc',import.meta.url),'utf8')).vars.KAFRA_ADMIN_USER;
+const root=resolve(target);await mkdir(root,{recursive:true});
+const password=process.env.KAFRA_NEW_PASSWORD??randomBytes(24).toString('base64url');
+if(password.length<12||password.length>256)throw new Error('Password must be 12 to 256 characters');
+const salt=randomBytes(16).toString('hex'),pepper=randomBytes(32).toString('base64url'),ownerKey=randomBytes(32).toString('hex');
+const secrets={KAFRA_ADMIN_HASH:salt+':'+await passwordHash(password,salt,pepper),KAFRA_ADMIN_PEPPER:pepper,KAFRA_GATE_KEY:ownerKey,KAFRA_DATA_KEY:randomBytes(32).toString('base64url')};
+await writeFile(join(root,'worker-secrets.json'),JSON.stringify(secrets,null,2),{flag:'wx',mode:0o600});
+await writeFile(join(root,'super-admin.txt'),'Username: '+username+'\nPassword: '+password+'\n\nSimpan secara privat. Password tidak terdapat di kode website.\n',{flag:'wx',mode:0o600});
+await writeFile(join(root,'gate-owner-config.json'),JSON.stringify({ownerKey},null,2),{flag:'wx',mode:0o600});
+console.log('Private Super Admin files created. No password or access key printed.');
