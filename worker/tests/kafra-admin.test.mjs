@@ -218,3 +218,17 @@ test('Super Admin resets a Server Owner password; old password and sessions stop
   assert.equal((await adminApi(request('login',{username:'sov.owner',password:'owner-pass-1234'}),env)).status,401);
   assert.equal((await adminApi(request('login',{username:'sov.owner',password:'brand-new-pass-99'}),env)).status,200);
 });
+test('MoRo activity pings (text/plain, key in path) show the character in play on the owner dashboard',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
+  const key=(await (await adminApi(request('admin/servers/moro',{id:own,enabled:true,plan:'Standard',expiresAt:'2099-12-31'},admin),env)).json()).ingestKey;
+  const ping=(k,data)=>adminApi(new Request('https://guard.example.test/api/ingest/moro/activity/'+k,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(data)}),env);
+  const sid='a'.repeat(32),base={sid,device:'Samsung SM-A556E',os:'Android 15',app:'Android app',ver:'1.8 / 42'};
+  const started=await ping(key,{...base,ev:'start',aid:0,cid:0,name:''});assert.equal(started.status,200);assert.equal(started.headers.get('Access-Control-Allow-Origin'),'*');
+  assert.equal((await ping(key,{...base,ev:'ping',aid:2000005,cid:150020,name:'testermaster'})).status,200);
+  assert.equal((await ping(key,{...base,sid:'b'.repeat(32),ev:'start',aid:0,cid:0,name:''})).status,200);
+  assert.equal((await ping('x'.repeat(43),{...base,ev:'ping'})).status,401);
+  assert.equal((await ping(key,{...base,sid:'zz',ev:'ping'})).status,400);assert.equal((await ping(key,{...base,ev:'dance'})).status,400);
+  let data=await (await adminApi(request('moro',undefined,owner),env)).json();
+  assert.deepEqual(data.players.map(p=>[p.name,p.accountId,p.device]),[['testermaster',2000005,'Samsung SM-A556E'],['',0,'Samsung SM-A556E']]);assert.equal(data.stats.online,2);
+  assert.equal((await ping(key,{...base,ev:'end'})).status,200);
+  data=await (await adminApi(request('moro',undefined,owner),env)).json();assert.deepEqual(data.players.map(p=>p.name),['']);
+});

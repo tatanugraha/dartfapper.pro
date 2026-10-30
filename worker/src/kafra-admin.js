@@ -187,8 +187,36 @@ async function gateFor(user,id,env){
   if(row.gate_url&&row.gate_key)return {url:row.gate_url,key:await unseal(env,row.gate_key,id)};
   return row.gate_url&&row.gate_url===envGate(env)&&env.KAFRA_GATE_KEY?{url:row.gate_url,key:env.KAFRA_GATE_KEY}:{};
 }
+// MoRo player activity (client/src/MoRo/core/activity.js): text/plain JSON without custom headers, so the
+// ingest key travels in the path (it ships inside the APK either way). One row per app start (sid).
+const moroPlayersSql="CREATE TABLE IF NOT EXISTS moro_players (server_id TEXT NOT NULL, sid TEXT NOT NULL, account_id INTEGER NOT NULL DEFAULT 0, char_id INTEGER NOT NULL DEFAULT 0, char_name TEXT NOT NULL DEFAULT '', device TEXT NOT NULL DEFAULT '', os TEXT NOT NULL DEFAULT '', app_version TEXT NOT NULL DEFAULT '', last_seen INTEGER NOT NULL, PRIMARY KEY (server_id, sid))";
+let moroPlayersReady=false;
+async function ensureMoroPlayers(env){if(!moroPlayersReady){await env.DB.prepare(moroPlayersSql).run();moroPlayersReady=true;}}
+async function moroActivity(request,env,key){
+  const cors={'Access-Control-Allow-Origin':'*'};
+  if(!/^[A-Za-z0-9_-]{43}$/.test(key))return json({error:'unauthorized'},401,cors);
+  const server=await env.DB.prepare('SELECT id FROM kafra_servers WHERE moro=1 AND moro_key_hash=?').bind(await sha(key)).first();
+  if(!server)return json({error:'unauthorized'},401,cors);
+  const minute=Math.floor(Date.now()/60000);
+  if(await bump(env,await sha('ingest|activity|'+server.id+'|'+minute),(minute+1)*60000)>3000)return json({error:'rate_limited'},429,{...cors,'Retry-After':'60'});
+  let data;try{const raw=await request.text();if(raw.length>2048)throw new Error('size');data=JSON.parse(raw);}catch{return json({error:'invalid_request'},400,cors);}
+  const line=(value,max)=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,'').slice(0,max):'';
+  const id=value=>Number.isSafeInteger(value)&&value>=0&&value<2**31?value:0;
+  if(!/^[a-f0-9]{32}$/.test(data?.sid??'')||!['start','ping','end'].includes(data.ev))return json({error:'invalid_request'},400,cors);
+  await ensureMoroPlayers(env);const now=Date.now();
+  if(data.ev==='end'){await env.DB.prepare('DELETE FROM moro_players WHERE server_id=? AND sid=?').bind(server.id,data.sid).run();return json({ok:true},200,cors);}
+  const version=line(data.ver,64)||line(data.app,32)||'unknown',os=line(data.os,32)||'unknown';
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO moro_players (server_id,sid,account_id,char_id,char_name,device,os,app_version,last_seen) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(server_id,sid) DO UPDATE SET account_id=excluded.account_id,char_id=excluded.char_id,char_name=excluded.char_name,device=excluded.device,os=excluded.os,app_version=excluded.app_version,last_seen=excluded.last_seen')
+      .bind(server.id,data.sid,id(data.aid),id(data.cid),line(data.name,24),line(data.device,64),os,version,now),
+    env.DB.prepare('INSERT INTO moro_devices (server_id,device_hash,app_version,os,last_seen) VALUES (?,?,?,?,?) ON CONFLICT(server_id,device_hash) DO UPDATE SET app_version=excluded.app_version,os=excluded.os,last_seen=excluded.last_seen')
+      .bind(server.id,await sha(server.id+'|sid|'+data.sid),version.slice(0,32),os,now)
+  ]);
+  return json({ok:true},200,cors);
+}
 // Mobile RO app → Worker. Bearer ingest key per server; data is client-reported, like Kafra Guard module reports.
 async function ingest(request,env,path){
+  if(path.startsWith('/api/ingest/moro/activity/'))return moroActivity(request,env,path.slice('/api/ingest/moro/activity/'.length));
   const kind=path==='/api/ingest/moro/crash'?'crash':path==='/api/ingest/moro/heartbeat'?'heartbeat':null;if(!kind)return json({error:'not_found'},404);
   const auth=request.headers.get('Authorization')??'',key=auth.startsWith('Bearer ')?auth.slice(7):'';
   if(!/^[A-Za-z0-9_-]{43}$/.test(key))return json({error:'unauthorized'},401);
@@ -216,17 +244,19 @@ async function moroDashboard(user,id,env){
   const row=await serverRow(user,id,env);if(!row?.moro)return json({error:'server_not_found'},404);
   const now=Date.now(),q=(sql,...args)=>env.DB.prepare(sql).bind(id,...args);
   await q('DELETE FROM moro_devices WHERE server_id=? AND last_seen<?',now-30*day).run();
-  const [builds,online,active,versions,crashes,recent]=await Promise.all([
+  const [builds,online,active,versions,crashes,recent,players]=await Promise.all([
     q('SELECT id,version,url,notes,created_at FROM moro_builds WHERE server_id=? ORDER BY created_at DESC LIMIT 20').all(),
     q('SELECT COUNT(*) AS n FROM moro_devices WHERE server_id=? AND last_seen>?',now-5*60000).first(),
     q('SELECT COUNT(*) AS n FROM moro_devices WHERE server_id=? AND last_seen>?',now-day).first(),
     q('SELECT app_version AS version,COUNT(*) AS devices FROM moro_devices WHERE server_id=? AND last_seen>? GROUP BY app_version ORDER BY devices DESC LIMIT 20',now-day).all(),
     q('SELECT COUNT(*) AS n FROM moro_crashes WHERE server_id=? AND created_at>?',now-day).first(),
-    q('SELECT id,app_version,os,model,message,stack,created_at FROM moro_crashes WHERE server_id=? ORDER BY id DESC LIMIT 50').all()
+    q('SELECT id,app_version,os,model,message,stack,created_at FROM moro_crashes WHERE server_id=? ORDER BY id DESC LIMIT 50').all(),
+    ensureMoroPlayers(env).then(()=>q("SELECT account_id,char_id,char_name,device,os,app_version,last_seen FROM moro_players WHERE server_id=? AND last_seen>? ORDER BY char_name='',char_name LIMIT 200",now-3*60000).all())
   ]);
   return json({server:{id,name:row.name},license:{plan:row.moro_plan,expiresAt:row.moro_expires,active:!row.moro_expires||row.moro_expires>now},
     builds:builds.results.map(b=>({id:b.id,version:b.version,url:b.url,notes:b.notes,publishedAt:b.created_at})),
     stats:{online:online.n,devices24h:active.n,crashes24h:crashes.n,versions:versions.results},
+    players:players.results.map(p=>({accountId:p.account_id,charId:p.char_id,name:p.char_name,device:p.device,os:p.os,appVersion:p.app_version,lastSeen:p.last_seen})),
     crashes:recent.results.map(c=>({id:c.id,appVersion:c.app_version,os:c.os,model:c.model,message:c.message,stack:c.stack,at:c.created_at})),updatedAt:now});
 }
 async function adminRoutes(request,env,path){

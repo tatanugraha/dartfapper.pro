@@ -88,3 +88,5 @@ CREATE TABLE IF NOT EXISTS kafra_members (
   name TEXT,
   created_at INTEGER NOT NULL
 );
+-- MoRo player activity (one row per app start); the Worker also creates it on first use.
+CREATE TABLE IF NOT EXISTS moro_players (server_id TEXT NOT NULL, sid TEXT NOT NULL, account_id INTEGER NOT NULL DEFAULT 0, char_id INTEGER NOT NULL DEFAULT 0, char_name TEXT NOT NULL DEFAULT '', device TEXT NOT NULL DEFAULT '', os TEXT NOT NULL DEFAULT '', app_version TEXT NOT NULL DEFAULT '', last_seen INTEGER NOT NULL, PRIMARY KEY (server_id, sid));
