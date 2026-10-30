@@ -299,6 +299,17 @@ async function adminRoutes(request,env,path){
     catch{return json({error:'username_taken'},409);}
     return json({username:data.username,serverId:data.serverId},201);
   }
+  if(path==='/api/admin/owners/password'){
+    if(typeof data.username!=='string'||!ownerName.test(data.username))return json({error:'invalid_username'},400);
+    if(typeof data.password!=='string'||data.password.length<12||data.password.length>256)return json({error:'weak_password'},400);
+    const salt=hex(crypto.getRandomValues(new Uint8Array(16)));
+    const hash=salt+':'+await passwordHash(data.password,salt,env.KAFRA_ADMIN_PEPPER);
+    const [updated]=await env.DB.batch([
+      env.DB.prepare('UPDATE kafra_owners SET password_hash=? WHERE username=?').bind(hash,data.username),
+      env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE username=?').bind(data.username)
+    ]);
+    return updated.meta.changes?json({ok:true}):json({error:'owner_not_found'},404);
+  }
   if(path==='/api/admin/owners/delete'){
     if(typeof data.username!=='string'||!ownerName.test(data.username))return json({error:'invalid_username'},400);
     await env.DB.batch([
@@ -362,10 +373,10 @@ export async function adminApi(request,env){
   if(path.startsWith('/api/admin/'))return user.role==='super_admin'?adminRoutes(request,env,path):json({error:'forbidden'},403);
   if(path==='/api/moro'&&request.method==='GET')return moroDashboard(user,url.searchParams.get('server')??user.serverId,env);
   // Client limits, kick and ban live on the gate; owners manage their own server, the Super Admin every server.
-  const gateActions={'/api/policy':'policy','/api/kick':'kick','/api/ban':'ban','/api/unban':'unban','/api/bans':'bans'};
+  const gateActions={'/api/policy':'policy','/api/kick':'kick','/api/ban':'ban','/api/unban':'unban','/api/bans':'bans','/api/rules':'rules','/api/rule':'rule','/api/unrule':'unrule'};
   if(Object.hasOwn(gateActions,path)){
     const action=gateActions[path],write=request.method==='POST';
-    const allowed=action==='policy'?['GET','POST']:action==='bans'?['GET']:['POST'];if(!allowed.includes(request.method))return json({error:'not_found'},404);
+    const allowed=action==='policy'?['GET','POST']:['bans','rules'].includes(action)?['GET']:['POST'];if(!allowed.includes(request.method))return json({error:'not_found'},404);
     let data=null;if(write){try{data=await body(request,512);}catch{return json({error:'invalid_request'},400);}}
     let payload=null;
     if(action==='policy'&&write){const {maxPerDevice,maxPerNetwork}=data;
@@ -373,6 +384,11 @@ export async function adminApi(request,env){
       payload={maxPerDevice,maxPerNetwork};}
     if(action==='kick'){if(!/^[a-f0-9]{32}$/.test(data.id??''))return json({error:'invalid_id'},400);payload={id:data.id};}
     if(action==='ban'||action==='unban'){if(!/^[a-f0-9]{64}$/.test(data.deviceId??''))return json({error:'invalid_device'},400);payload={deviceId:data.deviceId};}
+    // Module rules by SHA-256: the browser hashes the DLL locally; only name, hash and note reach the gate.
+    if(action==='rule'||action==='unrule'){if(!/^[a-f0-9]{64}$/.test(data.sha256??''))return json({error:'invalid_hash'},400);payload={sha256:data.sha256};}
+    if(action==='rule'){const name=text(String(data.name??'').trim(),128)??null,note=data.note==null||data.note===''?'':text(String(data.note).trim(),200);
+      if(!['allow','block'].includes(data.verdict))return json({error:'invalid_verdict'},400);
+      if(name===null||note===null||/[\x00-\x1f\x7f]/.test(name+note))return json({error:'invalid_rule_text'},400);Object.assign(payload,{name,verdict:data.verdict,note});}
     if(action==='ban'){const reason=data.reason==null||data.reason===''?'':text(String(data.reason).trim(),200);
       if(reason===null||/[\x00-\x1f\x7f]/.test(reason))return json({error:'invalid_reason'},400);payload.reason=reason;}
     const id=write?data.server:url.searchParams.get('server');
@@ -383,12 +399,14 @@ export async function adminApi(request,env){
       ...(payload?{method:'POST',body:JSON.stringify(payload)}:{})};
     try{
       const response=await fetch(new URL('/internal/owner/'+action,gate),init);
-      if(response.status===404&&(action==='kick'||action==='unban'))return json({error:action==='kick'?'session_closed':'not_banned'},404);
+      if(response.status===404&&['kick','unban','unrule'].includes(action))return json({error:{kick:'session_closed',unban:'not_banned',unrule:'rule_not_found'}[action]},404);
+      if(response.status===409&&action==='rule')return json({error:'rule_limit'},409);
       if(response.status===400)return json({error:action==='policy'?'invalid_limits':'invalid_request'},400);
       if(!response.ok)return unavailable('HTTP '+response.status);
-      const result=JSON.parse((await response.text()).slice(0,131072));
+      const result=JSON.parse((await response.text()).slice(0,action==='rules'?4194304:131072));
       if(action==='policy')return json({maxPerDevice:result.maxPerDevice,maxPerNetwork:result.maxPerNetwork,networkPrefix:result.networkPrefix});
       if(action==='bans')return json({bans:(Array.isArray(result.bans)?result.bans:[]).slice(0,500).map(b=>({deviceId:String(b.deviceId),reason:String(b.reason??''),bannedAt:b.bannedAt??null}))});
+      if(action==='rules')return json({rules:(Array.isArray(result.rules)?result.rules:[]).slice(0,5000).map(r=>({sha256:String(r.sha256),name:String(r.name??''),verdict:r.verdict==='block'?'block':'allow',note:String(r.note??''),addedAt:r.addedAt??null}))});
       return json({ok:true,endedSessions:result.endedSessions??(action==='kick'?1:0)});
     }catch(error){return unavailable(error);}
   }

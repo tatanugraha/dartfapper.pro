@@ -195,3 +195,26 @@ test('Moving the env gate to another port on the same host keeps its server row'
   const after=(await (await adminApi(request('admin/servers',undefined,admin),{...env,KAFRA_GATE_URL:'https://gate.ragna.test/'})).json()).servers;
   assert.equal(after.length,1);assert.equal(after[0].id,before[0].id);assert.equal(after[0].gateUrl,'https://gate.ragna.test/');assert.equal(after[0].builtIn,true);
 });
+test('module hash rules go to the owner gate with validated input',async t=>{const env=await fixture(t),{own,owner}=await ownerSetup(env);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];
+  globalThis.fetch=async(url,init)=>{seen.push({url:String(url),body:init.body});
+    if(String(url).endsWith('/rules'))return new Response(JSON.stringify({rules:[{sha256:'1'.repeat(64),name:'ddraw.dll',verdict:'allow',note:'',addedAt:null,secret:'x'}]}));
+    return new Response(JSON.stringify({sha256:'1'.repeat(64)}));};
+  const post=(path,data)=>adminApi(request(path,{server:own,...data},owner),env);
+  assert.equal((await post('rule',{sha256:'1'.repeat(64),name:' ddraw.dll ',verdict:'allow',note:'RO wrapper'})).status,200);
+  assert.equal(seen[0].url,'https://gate.sovereign.test/internal/owner/rule');assert.deepEqual(JSON.parse(seen[0].body),{sha256:'1'.repeat(64),name:'ddraw.dll',verdict:'allow',note:'RO wrapper'});
+  assert.deepEqual((await (await adminApi(request('rules?server='+own,undefined,owner),env)).json()).rules,[{sha256:'1'.repeat(64),name:'ddraw.dll',verdict:'allow',note:'',addedAt:null}]);
+  const before=seen.length;
+  for(const data of [{sha256:'X'.repeat(64),name:'a.dll',verdict:'allow'},{sha256:'1'.repeat(64),name:'a.dll',verdict:'trust'},{sha256:'1'.repeat(64),name:'',verdict:'allow'},{sha256:'1'.repeat(64),name:'a.dll',verdict:'block',note:'a\nb'}])
+    assert.equal((await post('rule',data)).status,400,JSON.stringify(data));
+  assert.equal((await adminApi(request('rule?server='+own,undefined,owner),env)).status,404);assert.equal(seen.length,before);
+});
+test('Super Admin resets a Server Owner password; old password and sessions stop working',async t=>{const env=await fixture(t),{admin,owner}=await ownerSetup(env);
+  assert.equal((await adminApi(request('admin/owners/password',{username:'sov.owner',password:'short'},admin),env)).status,400);
+  assert.equal((await adminApi(request('admin/owners/password',{username:'sov.owner',password:'brand-new-pass-99'},owner),env)).status,403);
+  assert.equal((await adminApi(request('admin/owners/password',{username:'nobody.here',password:'brand-new-pass-99'},admin),env)).status,404);
+  assert.equal((await adminApi(request('admin/owners/password',{username:'sov.owner',password:'brand-new-pass-99'},admin),env)).status,200);
+  assert.equal((await adminApi(request('me',undefined,owner),env)).status,401);
+  assert.equal((await adminApi(request('login',{username:'sov.owner',password:'owner-pass-1234'}),env)).status,401);
+  assert.equal((await adminApi(request('login',{username:'sov.owner',password:'brand-new-pass-99'}),env)).status,200);
+});

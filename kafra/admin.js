@@ -2,7 +2,7 @@
 if(location.hostname==='dartfapper.pro'||location.hostname==='www.dartfapper.pro')location.replace('https://kafra-guard-owner.tatagpriyanugraha.workers.dev/');
 const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer;
 const roles={super_admin:'Super Admin',server_owner:'Server Owner',member:'Member'};
-const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',invalid_reason:'Reason must be 200 characters or fewer, on one line.',invalid_device:'Invalid device ID.',not_banned:'That device is not banned.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
+const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',invalid_reason:'Reason must be 200 characters or fewer, on one line.',invalid_device:'Invalid device ID.',not_banned:'That device is not banned.',owner_not_found:'That owner account no longer exists.',invalid_hash:'Invalid SHA-256.',invalid_verdict:'Pick Allow or Block.',invalid_rule_text:'DLL name (128) and note (200) must be one line.',rule_not_found:'That rule no longer exists.',rule_limit:'Rule list is full (5000).',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
 const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'That account is no longer available. Please try again.'};
 const providerNames={google:'Google',discord:'Discord'};
 // OAuth callbacks come back as /#sso_error=…, /#linked=… or /#signed_in; read once, then clear the hash.
@@ -68,7 +68,7 @@ function render(){
     const account=session.account,player=cell(row,account?account.userid+(account.character?' · '+account.character.name+' (Lv '+account.character.level+')':' · at character select'):'Not logged in');
     if(account)player.title='Account ID '+account.accountId+(account.character?', character '+account.character.name:'');
     cell(row,session.ip);const build=cell(row,session.buildHash.slice(0,12)+'…',true);build.title=session.buildHash;
-    const count=cell(row,session.moduleCount===null?'Awaiting report':session.moduleCount+' modules');
+    const count=cell(row,session.moduleCount===null?'Awaiting report':session.moduleCount+' modules'+(session.unknownModules?' · '+session.unknownModules+' unknown':''));
     // Known third-party tools (Cheat Engine, XKore, WPE…) flagged by the gate from the module report.
     if(session.flags?.length){row.className='flagged';const badge=document.createElement('span');badge.className='badge alert';
       badge.textContent='⚠ '+[...new Set(session.flags.map(f=>f.tool))].join(', ');badge.title=session.flags.map(f=>f.name).join(', ');count.append(badge);}
@@ -103,13 +103,38 @@ async function load(){
   try{const data=await api('sessions?server='+encodeURIComponent(server)+'&offset='+state.offset);state={...state,...data};$('total').textContent=data.total;$('reported').textContent=data.sessions.filter(s=>s.moduleCount!==null).length;$('updated').textContent=time(data.updatedAt);$('message').textContent='';render();alertFlags(data.sessions);}
   catch(error){state={sessions:[],offset:state.offset,total:0};$('message').textContent=error.message;$('total').textContent='—';$('reported').textContent='—';$('updated').textContent='—';empty($('sessions'),'Data unavailable. The panel never shows sample data.',7);}
   finally{$('refresh').disabled=false;}
-  loadBans();
+  loadBans();loadRules();
 }
 async function guardAction(question,send,done){
   if(question&&!confirm(question))return;
   try{await send();$('message').textContent=done;}catch(error){$('message').textContent=error.message;}
   await load();
 }
+async function sha256Hex(file){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(b=>b.toString(16).padStart(2,'0')).join('');}
+async function loadRules(){
+  if(!server)return;const tbody=$('rules');
+  try{const {rules}=await api('rules?server='+encodeURIComponent(server));$('rules-panel').hidden=false;tbody.replaceChildren();
+    $('rules-count').textContent=rules.filter(r=>r.verdict==='allow').length+' allowed · '+rules.filter(r=>r.verdict==='block').length+' blocked';
+    if(!rules.length)empty(tbody,'No rules yet. Add DLLs here, or use Allow / Block in a client\'s module list.',5);
+    for(const rule of rules.sort((a,b)=>a.verdict.localeCompare(b.verdict)||a.name.localeCompare(b.name))){const row=document.createElement('tr');
+      cell(row,rule.name||'—',true);const hash=cell(row,rule.sha256.slice(0,16)+'…',true);hash.title=rule.sha256;
+      const verdict=cell(row,'');const badge=document.createElement('span');badge.className='badge'+(rule.verdict==='block'?' alert':'');badge.textContent=rule.verdict==='block'?'Block':'Allow';verdict.replaceChildren(badge);
+      cell(row,rule.note||'—');const action=document.createElement('td'),remove=document.createElement('button');remove.className='quiet';remove.textContent='Remove';
+      remove.addEventListener('click',()=>guardAction('Remove the rule for '+(rule.name||rule.sha256.slice(0,16))+'?',()=>post('unrule',{server,sha256:rule.sha256}),'Rule removed.').then(loadRules));
+      action.append(remove);row.append(action);tbody.append(row);}}
+  catch{$('rules-panel').hidden=true;}
+}
+$('rules-form').addEventListener('submit',async event=>{event.preventDefault();const files=[...$('rule-files').files];if(!files.length){$('rules-status').textContent='Pick one or more DLL files.';return;}
+  const verdict=$('rule-verdict').value,note=$('rule-note').value.trim();let done=0;
+  try{for(const file of files){if(file.size>256*1024*1024)throw new Error(file.name+' is larger than 256 MB.');$('rules-status').textContent='Hashing '+file.name+'…';
+      await post('rule',{server,sha256:await sha256Hex(file),name:file.name.slice(0,128),verdict,note});done++;}
+    $('rules-status').textContent=done+' rule'+(done===1?'':'s')+' saved.';$('rules-form').reset();}
+  catch(error){$('rules-status').textContent=(done?done+' saved, then: ':'')+error.message;}
+  await loadRules();await load();});
+$('allow-unknown').addEventListener('click',async()=>{if(!unknownReport.length||!confirm('Allow all '+unknownReport.length+' unknown DLLs in this report by hash? Do this only on a clean PC.'))return;
+  let done=0;try{for(const module of unknownReport){await post('rule',{server,sha256:module.sha256,name:String(module.name).slice(0,128),verdict:'allow',note:'Baseline from a clean client'});done++;}}
+  catch(error){$('module-status').textContent=done+' allowed, then: '+error.message;}
+  await loadRules();if(reportSession)await modules(reportSession);await load();});
 async function loadBans(){
   if(!server)return;const tbody=$('bans');
   try{const {bans}=await api('bans?server='+encodeURIComponent(server));tbody.replaceChildren();$('bans-panel').hidden=false;
@@ -131,15 +156,26 @@ $('limits-form').addEventListener('submit',async event=>{event.preventDefault();
   try{const policy=await post('policy',{server,maxPerDevice:Number($('limit-device').value),maxPerNetwork:Number($('limit-network').value)});
     $('limit-device').value=policy.maxPerDevice;$('limit-network').value=policy.maxPerNetwork;$('limits-status').textContent='Saved · applies to new game starts';}
   catch(error){$('limits-status').textContent=error.message;}finally{button.disabled=false;}});
-async function modules(session){
-  $('module-panel').hidden=false;$('module-title').textContent='Client modules · '+session.ip;empty($('modules'),'Loading client report…',3);$('module-status').textContent='';
+let unknownReport=[],reportSession=null;
+async function modules(session){reportSession=session;
+  $('module-panel').hidden=false;$('module-title').textContent='Client modules · '+session.ip;empty($('modules'),'Loading client report…',4);$('module-status').textContent='';
   try{const data=await api('modules?server='+encodeURIComponent(server)+'&id='+encodeURIComponent(session.id));
     $('module-status').textContent=data.receivedAt?'Received '+time(data.receivedAt)+(data.truncated?' · List capped at 128 modules.':''):'The client has not sent a module report yet.';
-    if(!data.modules.length){empty($('modules'),'No module report for this session yet.',3);return;}
-    $('modules').replaceChildren();for(const module of [...data.modules].sort((a,b)=>!!b.flag-!!a.flag)){const row=document.createElement('tr');cell(row,module.name,true);const status=cell(row,'');
-      const badge=document.createElement('span');badge.className='badge'+(module.signature==='verified'?'':' review');badge.textContent=({verified:'Verified',unsigned:'Unsigned',untrusted:'Untrusted',read_error:'Unreadable'})[module.signature]??'Not checked';status.replaceChildren(badge);
-      if(module.flag){row.className='flagged';const flag=document.createElement('span');flag.className='badge alert';flag.textContent='⚠ '+module.flag;status.append(flag);}cell(row,module.sha256??'Hash unavailable',true).className='module-hash';$('modules').append(row);}
-  }catch(error){empty($('modules'),error.message,3);}
+    if(!data.modules.length){empty($('modules'),'No module report for this session yet.',4);return;}
+    const order={blocked:0,unknown:1,allowed:2,signed:3};unknownReport=data.modules.filter(m=>m.trust==='unknown'&&m.sha256);$('allow-unknown').hidden=!unknownReport.length;
+    $('allow-unknown').textContent='Allow all unknown ('+unknownReport.length+')';
+    $('modules').replaceChildren();for(const module of [...data.modules].sort((a,b)=>(order[a.trust]??1)-(order[b.trust]??1))){const row=document.createElement('tr');cell(row,module.name,true);const status=cell(row,'');
+      const badge=document.createElement('span');badge.className='badge'+(module.trust==='allowed'||module.trust==='signed'?'':' review');
+      badge.textContent=({allowed:'Allowed (hash)',signed:'Verified signature',unknown:({unsigned:'Unsigned',untrusted:'Untrusted',read_error:'Unreadable'})[module.signature]??'Unknown'})[module.trust]??'Not checked';status.replaceChildren(badge);
+      if(module.flag){row.className='flagged';badge.className='badge alert';badge.textContent='⚠ '+module.flag;}cell(row,module.sha256??'Hash unavailable',true).className='module-hash';
+      const actions=document.createElement('td');actions.className='row-actions';
+      if(module.sha256)for(const [verdict,label] of [['allow','Allow'],['block','Block']])if(!(verdict==='allow'&&module.trust==='allowed')){
+        const button=document.createElement('button');button.className='quiet'+(verdict==='block'?' danger':'');button.textContent=label;
+        button.addEventListener('click',async()=>{const note=verdict==='block'?prompt('Block '+module.name+' by hash.\nLabel shown on the alert (optional):',''):'';if(note===null)return;
+          try{await post('rule',{server,sha256:module.sha256,name:module.name,verdict,note});await loadRules();await modules(session);await load();}catch(error){$('module-status').textContent=error.message;}});
+        actions.append(button);}
+      row.append(actions);$('modules').append(row);}
+  }catch(error){empty($('modules'),error.message,4);}
   $('module-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 async function loadMoro(){
@@ -172,7 +208,10 @@ async function loadAdmin(){
       const owners=document.createElement('td');owners.className='owner-cell';
       if(!s.owners.length){const none=document.createElement('span');none.className='muted';none.textContent='No owners yet';owners.append(none);}
       for(const o of s.owners){const chip=document.createElement('span');chip.className='chip';chip.textContent=o.username;const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title='Remove owner '+o.username;remove.setAttribute('aria-label','Remove owner '+o.username);
-        remove.addEventListener('click',()=>confirmed('Remove owner account "'+o.username+'"? Its login sessions are revoked too.',()=>post('admin/owners/delete',{username:o.username})));chip.append(remove);owners.append(chip);}
+        remove.addEventListener('click',()=>confirmed('Remove owner account "'+o.username+'"? Its login sessions are revoked too.',()=>post('admin/owners/delete',{username:o.username})));const reset=document.createElement('button');reset.type='button';reset.textContent='Reset password';reset.className='chip-action';reset.title='Set a new password for '+o.username;
+        reset.addEventListener('click',()=>{const password=prompt('New password for "'+o.username+'" (at least 12 characters). Their open sessions are signed out.');if(password===null)return;
+          confirmed('Set the new password for "'+o.username+'"?',async()=>{await post('admin/owners/password',{username:o.username,password});alert('Password changed for '+o.username+'.');});});
+        chip.append(reset,remove);owners.append(chip);}
       row.append(owners);const action=document.createElement('td');action.className='actions';
       const manage=document.createElement('button');manage.className='quiet';manage.textContent='Manage';manage.addEventListener('click',()=>openManage(s));
       const remove=document.createElement('button');remove.className='quiet danger';remove.textContent='Delete';
