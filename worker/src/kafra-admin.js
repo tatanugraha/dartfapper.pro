@@ -379,7 +379,7 @@ export async function adminApi(request,env){
     let target;try{target=await gateFor(user,id??(user.role==='server_owner'?user.serverId:'default'),env);}catch{return json({error:'data_key_not_configured'},503);}
     if(!target)return json({error:'server_not_found'},404);
     const gate=target.url&&target.key?gateUrl(target.url,env):null;if(!gate)return json({error:'gate_not_configured'},503);
-    const init={headers:{Authorization:'Bearer '+target.key,...(payload?{'Content-Type':'application/json'}:{})},redirect:'error',signal:AbortSignal.timeout(4000),
+    const init={headers:{Authorization:'Bearer '+target.key,...(payload?{'Content-Type':'application/json'}:{})},redirect:'manual',signal:AbortSignal.timeout(4000),
       ...(payload?{method:'POST',body:JSON.stringify(payload)}:{})};
     try{
       const response=await fetch(new URL('/internal/owner/'+action,gate),init);
@@ -406,7 +406,7 @@ export async function adminApi(request,env){
     const offset=Number(url.searchParams.get('offset')??0);if(!Number.isSafeInteger(offset)||offset<0||offset>10000)return json({error:'invalid_offset'},400);upstream.searchParams.set('offset',String(offset));
   }
   try{
-    const response=await fetch(upstream,{headers:{Authorization:'Bearer '+target.key},redirect:'error',signal:AbortSignal.timeout(4000)});
+    const response=await fetch(upstream,{headers:{Authorization:'Bearer '+target.key},redirect:'manual',signal:AbortSignal.timeout(4000)});
     if(response.status===404&&path==='/api/modules')return json({error:'session_closed'},404);
     if(!response.ok)return unavailable('HTTP '+response.status);
     const reader=response.body.getReader();let size=0;const chunks=[];
