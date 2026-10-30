@@ -182,3 +182,11 @@ test('The env gate (KAFRA_GATE_URL) is listed as a real server and uses KAFRA_GA
     assert.equal(seen.url,'https://gate.ragna.test:8443/internal/owner/sessions?offset=0');assert.equal(seen.auth,'Bearer '+gateKey);}
   assert.equal((await adminApi(request('admin/servers/kafra',{id:servers[0].id,enabled:true,gateUrl:'https://gate.ragna.test:8443/'},admin),env)).status,200);
 });
+test('Linking a Google login that only opened a member account moves it to the signed-in account',async t=>{const env={...await fixture(t),...sso};
+  const profile={current:{sub:'google-555',email:'me@gmail.test',email_verified:true}};fakeProviders(t,profile);
+  const first=await oauth(env,'google','login'),member=(await (await adminApi(request('me',undefined,first.cookie),env)).json()).username;
+  const admin=await login(env);assert.equal((await oauth(env,'google','link',admin)).location,'/#linked=google');
+  assert.equal((await (await adminApi(request('me',undefined,(await oauth(env,'google','login')).cookie),env)).json()).role,'super_admin');
+  assert.equal(await env.DB.prepare('SELECT username FROM kafra_members WHERE username=?').bind(member).first(),null);
+  assert.equal((await adminApi(request('me',undefined,first.cookie),env)).status,401);
+});

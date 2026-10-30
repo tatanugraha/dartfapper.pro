@@ -99,10 +99,17 @@ async function oauthCallback(env,name,url){
   if(row.mode==='link'){
     const user=await sessionUser(env,row.session_hash);if(!user||user.username!==row.username)return home('sso_error=signin_first');
     const taken=await env.DB.prepare('SELECT username FROM kafra_identities WHERE provider=? AND subject=?').bind(name,identity.subject).first();
-    if(taken&&taken.username!==user.username)return home('sso_error=already_linked');
+    // A login that only opened an empty member account (no password, no servers) moves to this account; the member is
+    // removed once it has no login left. Logins of owner or admin accounts are never taken over.
+    const member=taken&&taken.username!==user.username?await env.DB.prepare('SELECT username FROM kafra_members WHERE username=?').bind(taken.username).first():null;
+    if(taken&&taken.username!==user.username&&!member)return home('sso_error=already_linked');
     await env.DB.batch([
       env.DB.prepare('DELETE FROM kafra_identities WHERE provider=? AND username=?').bind(name,user.username),
-      env.DB.prepare('INSERT OR REPLACE INTO kafra_identities (provider,subject,username,label,linked_at) VALUES (?,?,?,?,?)').bind(name,identity.subject,user.username,identity.label,Date.now())
+      env.DB.prepare('INSERT OR REPLACE INTO kafra_identities (provider,subject,username,label,linked_at) VALUES (?,?,?,?,?)').bind(name,identity.subject,user.username,identity.label,Date.now()),
+      ...(member?[
+        env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE username=? AND NOT EXISTS (SELECT 1 FROM kafra_identities WHERE username=?)').bind(member.username,member.username),
+        env.DB.prepare('DELETE FROM kafra_members WHERE username=? AND NOT EXISTS (SELECT 1 FROM kafra_identities WHERE username=?)').bind(member.username,member.username)
+      ]:[])
     ]);
     return home('linked='+name);
   }
