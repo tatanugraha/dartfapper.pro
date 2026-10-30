@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MoRo · Mobile Ragnarok Engine</title>
-  <meta name="description" content="MoRo turns your rAthena server into an Android app. Packet 2003–2025, 3rd & 4th job effects, modern UI, signed OTA updates, your own branding.">
-  <meta property="og:title" content="MoRo · Mobile Ragnarok Engine">
+  <title>MoRo (Mobile RO Engine)</title>
+  <meta name="description" content="MoRo turns your rAthena server into an Android app. Packet 2003–2025, 3rd & 4th job effects, modern UI, signed OTA updates, an owner dashboard, your own branding.">
+  <meta property="og:title" content="MoRo (Mobile RO Engine)">
   <meta property="og:description" content="Ragnarok Online, made for your phone. Your rAthena server as a branded Android app.">
   <meta property="og:image" content="assets/img/hero.jpg">
   <meta name="theme-color" content="#050608">
@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/moro.css?v=20261030b">
+  <link rel="stylesheet" href="assets/moro.css?v=20261030c">
 </head>
 
 <body>
@@ -30,6 +30,7 @@
         <a href="#tour" data-i18n="nav.tour">Tour</a>
         <a href="#features" data-i18n="nav.features">Features</a>
         <a href="#how" data-i18n="nav.how">How it works</a>
+        <a href="#dashboard" data-i18n="nav.dash">Dashboard</a>
         <a href="#specs" data-i18n="nav.specs">Specs</a>
         <a href="#pricing" data-i18n="nav.pricing">Pricing</a>
       </nav>
@@ -50,7 +51,7 @@
       <div class="hero-bg" aria-hidden="true"><img src="assets/img/hero.jpg" alt="" width="1600" height="900"></div>
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <p class="kicker" data-i18n="hero.kicker">Mobile Ragnarok Engine</p>
+          <p class="kicker" data-i18n="hero.kicker">MoRo (Mobile RO Engine)</p>
           <h1 class="hero-title" data-i18n-html="hero.title">Ragnarok Online,<br><span>made for your phone.</span></h1>
           <p class="hero-text" data-i18n="hero.text">MoRo turns your rAthena server into an Android app. Your players join the same world as PC, from their phone, with a UI built for thumbs.</p>
           <div class="hero-cta">
@@ -132,6 +133,44 @@
         <p class="kicker center" data-reveal data-i18n="how.kicker">For server owners</p>
         <h2 class="h2 center" data-reveal data-i18n-html="how.title">From your server to <span>their phones</span></h2>
         <ol class="steps" data-steps></ol>
+      </div>
+    </section>
+
+    <!-- OWNER DASHBOARD -->
+    <section class="section" id="dashboard">
+      <div class="wrap">
+        <p class="kicker center" data-reveal data-i18n="dash.kicker">Owner dashboard</p>
+        <h2 class="h2 center" data-reveal data-i18n-html="dash.title">Your phone players, <span>live in one dashboard</span></h2>
+        <p class="lead center" data-reveal data-i18n="dash.text">Every MoRo server gets a private owner console. See who plays on phones right now, push an update, and roll it back in one click.</p>
+
+        <div class="dash" data-reveal>
+          <div class="dash-mock" aria-hidden="true">
+            <div class="dm-top"><span class="dm-title">Mobile RO · <b>Your RO</b></span><span class="dm-sample" data-i18n="dash.sample">Sample data</span></div>
+            <div class="dm-stats">
+              <div><small data-i18n="dash.m.license">License</small><strong class="cy">Active</strong></div>
+              <div><small data-i18n="dash.m.online">Players online</small><strong>24</strong></div>
+              <div><small data-i18n="dash.m.devices">Devices (24h)</small><strong>61</strong></div>
+              <div><small data-i18n="dash.m.crashes">Crashes (24h)</small><strong>0</strong></div>
+            </div>
+            <div class="dm-ota">
+              <div class="dm-ota-head"><b data-i18n="dash.m.ota">App updates (OTA)</b><span class="dm-btns"><i class="dm-btn up" data-i18n="dash.m.update">Update</i><i class="dm-btn rb" data-i18n="dash.m.rollback">Rollback</i></span></div>
+              <div class="dm-ch">
+                <div><small>Production</small><strong>v1.4.0</strong></div>
+                <div><small>Canary</small><strong>v1.4.1</strong></div>
+                <div><small data-i18n="dash.m.safe">Safe rollback</small><strong>v1.3.2</strong></div>
+              </div>
+            </div>
+            <table class="dm-table">
+              <thead><tr><th data-i18n="dash.m.char">Character</th><th data-i18n="dash.m.acc">Account</th><th data-i18n="dash.m.device">Device</th><th data-i18n="dash.m.seen">Last seen</th></tr></thead>
+              <tbody>
+                <tr><td>Aria</td><td>aria01</td><td>Galaxy A55 · Android 15</td><td>now</td></tr>
+                <tr><td>Rangga</td><td>rgg_99</td><td>Redmi Note 13 · Android 14</td><td>1 min</td></tr>
+                <tr><td>Mika</td><td>mika.ro</td><td>Infinix HOT 50 · Android 14</td><td>2 min</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul class="dash-list" data-dash></ul>
+        </div>
       </div>
     </section>
 
@@ -230,6 +269,6 @@
     </div>
   </footer>
 
-  <script src="assets/moro.js?v=20261030b"></script>
+  <script src="assets/moro.js?v=20261030c"></script>
 </body>
 </html>

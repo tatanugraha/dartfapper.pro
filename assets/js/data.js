@@ -30,7 +30,7 @@ window.GAMES = [
   },
   {
     id: "moro",
-    title: "MoRo",
+    title: "MoRo (Mobile RO Engine)",
     tag: { en: "Mobile RO client", id: "Client RO mobile" },
     status: "live",
     info: { en: "2 servers on MoRo · Android", id: "2 server pakai MoRo · Android" },
@@ -41,6 +41,20 @@ window.GAMES = [
     emblem: "assets/images/emblem-moro.png",
     url: "moro/", // switch to "https://moro.dartfapper.pro/" once that subdomain is live
     cta: { en: "Explore MoRo", id: "Lihat MoRo" }
+  },
+  {
+    id: "kafra",
+    title: "Kafra Guard (Gameguard)",
+    tag: { en: "Anti-cheat for RO", id: "Anti-cheat RO" },
+    status: "beta",
+    info: { en: "rAthena · Windows client", id: "rAthena · client Windows" },
+    blurb: {
+      en: "Gameguard for Ragnarok Online servers. Checks every client, blocks cheat tools by file hash, limits multi-client, and shows owners who is playing in a live dashboard.",
+      id: "Gameguard buat server Ragnarok Online. Cek tiap client, blokir cheat tool lewat hash file, batasi multi-client, dan tampilkan siapa yang main di dashboard live."
+    },
+    emblem: "assets/images/emblem-kafra.svg",
+    url: "contact/?service=kafra",
+    cta: { en: "Get Kafra Guard", id: "Pakai Kafra Guard" }
   },
   {
     id: "mythrix",

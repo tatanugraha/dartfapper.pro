@@ -46,7 +46,7 @@ const FEATURES = [
   { i: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", t: { en: "Protected GRF", id: "GRF terlindungi" }, d: { en: "Encrypted GRFs (GRF Editor key, DES) are read on the device.", id: "GRF terenkripsi (key GRF Editor, DES) dibaca langsung di HP." } },
   { i: "M12 4v12m0 0l-5-5m5 5l5-5M5 20h14", t: { en: "Stream or download", id: "Stream atau unduh" }, d: { en: "Fetch only what the current map needs, or pull the full data in the background.", id: "Ambil yang dibutuhin map sekarang aja, atau unduh semua data di belakang." } },
   { i: "M3 12h4l3-8 4 16 3-8h4", t: { en: "Smooth on high ping", id: "Mulus walau ping tinggi" }, d: { en: "Direct TCP, no WebSocket proxy, and move prediction on the joystick.", id: "TCP langsung tanpa proxy WebSocket, plus prediksi gerak di joystick." } },
-  { i: "M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4", t: { en: "Signed OTA updates", id: "Update OTA bertanda tangan" }, d: { en: "Fixes reach phones without a new APK. One command rolls back.", id: "Perbaikan sampai ke HP tanpa APK baru. Satu perintah buat rollback." } },
+  { i: "M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4", t: { en: "Signed OTA updates", id: "Update OTA bertanda tangan" }, d: { en: "Fixes reach phones without a new APK. Update and roll back from your dashboard.", id: "Perbaikan sampai ke HP tanpa APK baru. Update dan rollback dari dashboard lo." } },
   { i: "M12 3a4 4 0 0 1 4 4v4a4 4 0 0 1-8 0V7a4 4 0 0 1 4-4zM5 11a7 7 0 0 0 14 0M12 18v3", t: { en: "Extras players love", id: "Fitur yang pemain suka" }, d: { en: "Auto attack / auto hunt (if your server allows), LGP, nick colours, auras, voice chat with PC players.", id: "Auto attack / auto hunt (kalau server ngizinin), LGP, warna nick, aura, voice chat bareng pemain PC." } }
 ];
 
@@ -57,6 +57,14 @@ const STEPS = [
   { t: { en: "Updates arrive by themselves", id: "Update datang sendiri" }, d: { en: "Signed over-the-air updates, with rollback if anything goes wrong.", id: "Update over-the-air bertanda tangan, bisa rollback kalau ada masalah." } }
 ];
 
+// Owner dashboard (the console at dartfapper.pro/kafra/)
+const DASH = [
+  { t: { en: "Players online, live", id: "Pemain online, live" }, d: { en: "Character, account, IP and phone model for everyone playing on MoRo, from your game server and the app.", id: "Karakter, akun, IP, dan tipe HP semua yang main di MoRo, dari server game dan app-nya." } },
+  { t: { en: "Update and rollback in one click", id: "Update dan rollback sekali klik" }, d: { en: "Test on canary phones, then send it to everyone. Every release keeps a signed rollback ready.", id: "Tes di HP canary, lalu kirim ke semua. Tiap rilis selalu punya rollback bertanda tangan yang siap." } },
+  { t: { en: "Devices and crash reports", id: "Device dan laporan crash" }, d: { en: "Phones seen in the last 24 hours, app versions, and crashes reported by the app.", id: "HP yang terlihat 24 jam terakhir, versi app, dan crash yang dilaporkan app." } },
+  { t: { en: "One console for both products", id: "Satu console buat dua produk" }, d: { en: "Running Kafra Guard on PC too? Its clients, modules and bans sit in the same login.", id: "Pakai Kafra Guard di PC juga? Client, modul, dan ban-nya ada di login yang sama." } }
+];
+
 const SPECS = [
   [{ en: "Platform", id: "Platform" }, { en: "Android 8.0 (API 26) or newer", id: "Android 8.0 (API 26) ke atas" }],
   [{ en: "Minimum phone", id: "HP minimum" }, { en: "2 GB RAM, OpenGL ES 3.0 GPU (Mali-G52 / Adreno 506 class)", id: "RAM 2 GB, GPU OpenGL ES 3.0 (kelas Mali-G52 / Adreno 506)" }],
@@ -65,7 +73,8 @@ const SPECS = [
   [{ en: "Connection", id: "Koneksi" }, { en: "Direct TCP to your login/char/map servers, no WebSocket proxy", id: "TCP langsung ke login/char/map server, tanpa proxy WebSocket" }],
   [{ en: "Game data", id: "Data game" }, { en: "Your GRFs (encrypted supported), served over HTTPS; stream or full download", id: "GRF lo (yang terenkripsi juga bisa), lewat HTTPS; stream atau unduh penuh" }],
   [{ en: "Frame rate", id: "Frame rate" }, { en: "Up to 50 FPS at native resolution, built-in performance panel", id: "Sampai 50 FPS di resolusi asli, panel performa bawaan" }],
-  [{ en: "Updates", id: "Update" }, { en: "Signed OTA code updates, one-command rollback", id: "Update kode OTA bertanda tangan, rollback satu perintah" }],
+  [{ en: "Updates", id: "Update" }, { en: "Signed OTA code updates, update and rollback from the owner dashboard", id: "Update kode OTA bertanda tangan, update dan rollback dari dashboard owner" }],
+  [{ en: "Owner dashboard", id: "Dashboard owner" }, { en: "Players online (character, account, IP, phone), devices, crashes, OTA, license", id: "Pemain online (karakter, akun, IP, HP), device, crash, OTA, lisensi" }],
   [{ en: "Branding", id: "Branding" }, { en: "App name, icon, splash, loading screens", id: "Nama app, ikon, splash, loading screen" }],
   [{ en: "Anti-cheat", id: "Anti-cheat" }, { en: "Gepard or other PC shields: your server must let MoRo connect", id: "Gepard atau shield PC lain: server lo harus ngizinin MoRo connect" }]
 ];
@@ -75,15 +84,16 @@ const FAQ = [
   { q: { en: "My server uses Gepard. Will it work?", id: "Server gue pakai Gepard. Bisa?" }, a: { en: "Yes, as long as your server lets MoRo connect. PC shields can't run on Android, so the server has to allow the MoRo client.", id: "Bisa, asal server lo ngizinin MoRo connect. Shield PC nggak jalan di Android, jadi server harus ngizinin client MoRo." } },
   { q: { en: "How big is the download?", id: "Seberapa besar unduhannya?" }, a: { en: "Players don't need the whole client up front. Game data can stream per map as players move, or download in full in the background. You choose the default.", id: "Pemain nggak perlu unduh client penuh duluan. Data game bisa di-stream per map sambil jalan, atau diunduh penuh di belakang. Lo yang pilih default-nya." } },
   { q: { en: "Do fixes need a new APK?", id: "Perbaikan perlu APK baru?" }, a: { en: "No. Code fixes ship as signed over-the-air updates. A new APK is only needed for native changes.", id: "Nggak. Perbaikan kode dikirim lewat update OTA bertanda tangan. APK baru cuma perlu buat perubahan native." } },
+  { q: { en: "Can I see who plays on phones?", id: "Bisa lihat siapa yang main di HP?" }, a: { en: "Yes. The owner dashboard lists everyone online on MoRo with their character, account, IP and phone model, and shows devices and crashes over the last 24 hours.", id: "Bisa. Dashboard owner nampilin semua yang online di MoRo lengkap dengan karakter, akun, IP, dan tipe HP, plus device dan crash 24 jam terakhir." } },
   { q: { en: "Is there an iPhone version?", id: "Ada versi iPhone?" }, a: { en: "Not yet. MoRo is Android first.", id: "Belum. MoRo fokus Android dulu." } }
 ];
 
 // UI text
 const DICT = {
   en: {
-    "nav.tour": "Tour", "nav.features": "Features", "nav.how": "How it works", "nav.specs": "Specs", "nav.pricing": "Pricing",
+    "nav.tour": "Tour", "nav.features": "Features", "nav.how": "How it works", "nav.dash": "Dashboard", "nav.specs": "Specs", "nav.pricing": "Pricing",
     "cta.get": "Get MoRo", "cta.getFor": "Get MoRo for your server", "cta.see": "See it in action", "cta.discord": "Talk on Discord",
-    "hero.kicker": "Mobile Ragnarok Engine",
+    "hero.kicker": "MoRo (Mobile RO Engine)",
     "hero.title": "Ragnarok Online,<br><span>made for your phone.</span>",
     "hero.text": "MoRo turns your rAthena server into an Android app. Your players join the same world as PC, from their phone, with a UI built for thumbs.",
     "joined": "{n} servers already run on MoRo",
@@ -98,6 +108,12 @@ const DICT = {
     "gal.c2": "Tap to walk, with the route drawn on the ground",
     "gal.c3": "Login with your server's own branding",
     "how.kicker": "For server owners", "how.title": "From your server to <span>their phones</span>",
+    "dash.kicker": "Owner dashboard", "dash.title": "Your phone players, <span>live in one dashboard</span>",
+    "dash.text": "Every MoRo server gets a private owner console. See who plays on phones right now, push an update, and roll it back in one click.",
+    "dash.sample": "Sample data", "dash.login": "Owner login",
+    "dash.m.license": "License", "dash.m.online": "Players online", "dash.m.devices": "Devices (24h)", "dash.m.crashes": "Crashes (24h)",
+    "dash.m.ota": "App updates (OTA)", "dash.m.update": "Update", "dash.m.rollback": "Rollback", "dash.m.safe": "Safe rollback",
+    "dash.m.char": "Character", "dash.m.acc": "Account", "dash.m.device": "Device", "dash.m.seen": "Last seen",
     "srv.kicker": "Already on MoRo", "srv.title": "servers, one engine",
     "srv.text": "Every server gets its own app: its own name, icon, splash and loading screens. Underneath, they all run the same MoRo engine, so a fix for one reaches all of them.",
     "srv.cta": "Add your server", "srv.visit": "Visit site",
@@ -122,9 +138,9 @@ const DICT = {
     "foot.legal": "Built on roBrowserLegacy (GPL-3.0). Ragnarok Online is a trademark of Gravity Co., Ltd.; MoRo is not affiliated with Gravity."
   },
   id: {
-    "nav.tour": "Tur", "nav.features": "Fitur", "nav.how": "Cara kerja", "nav.specs": "Spesifikasi", "nav.pricing": "Harga",
+    "nav.tour": "Tur", "nav.features": "Fitur", "nav.how": "Cara kerja", "nav.dash": "Dashboard", "nav.specs": "Spesifikasi", "nav.pricing": "Harga",
     "cta.get": "Pakai MoRo", "cta.getFor": "Pakai MoRo di server lo", "cta.see": "Lihat langsung", "cta.discord": "Ngobrol di Discord",
-    "hero.kicker": "Mobile Ragnarok Engine",
+    "hero.kicker": "MoRo (Mobile RO Engine)",
     "hero.title": "Ragnarok Online,<br><span>dibikin buat HP.</span>",
     "hero.text": "MoRo bikin server rAthena lo jadi app Android. Pemain masuk ke dunia yang sama dengan PC, dari HP, dengan UI yang pas di jempol.",
     "joined": "{n} server sudah pakai MoRo",
@@ -139,6 +155,12 @@ const DICT = {
     "gal.c2": "Tap buat jalan, rutenya digambar di tanah",
     "gal.c3": "Login dengan branding server sendiri",
     "how.kicker": "Buat owner server", "how.title": "Dari server lo ke <span>HP mereka</span>",
+    "dash.kicker": "Dashboard owner", "dash.title": "Pemain HP lo, <span>live di satu dashboard</span>",
+    "dash.text": "Tiap server MoRo dapat console owner pribadi. Lihat siapa yang lagi main di HP, kirim update, dan rollback sekali klik.",
+    "dash.sample": "Data contoh", "dash.login": "Login owner",
+    "dash.m.license": "Lisensi", "dash.m.online": "Pemain online", "dash.m.devices": "Device (24 jam)", "dash.m.crashes": "Crash (24 jam)",
+    "dash.m.ota": "Update app (OTA)", "dash.m.update": "Update", "dash.m.rollback": "Rollback", "dash.m.safe": "Rollback aman",
+    "dash.m.char": "Karakter", "dash.m.acc": "Akun", "dash.m.device": "Device", "dash.m.seen": "Terakhir",
     "srv.kicker": "Sudah pakai MoRo", "srv.title": "server, satu engine",
     "srv.text": "Tiap server dapat app sendiri: nama, ikon, splash, dan loading screen sendiri. Di dalamnya semua jalan di engine MoRo yang sama, jadi perbaikan buat satu server sampai ke semuanya.",
     "srv.cta": "Tambahin server lo", "srv.visit": "Buka website",
@@ -232,6 +254,10 @@ function render() {
         <span class="srv-go">${esc(ui("srv.visit"))}</span>
       </a>
     </li>`).join("");
+
+  $("[data-dash]").innerHTML = DASH.map((d) => `
+    <li><strong>${esc(tx(d.t))}</strong><span>${esc(tx(d.d))}</span></li>`).join("") +
+    `<li class="dash-cta"><a class="btn btn-ghost" href="../kafra/">${esc(ui("dash.login"))}</a></li>`;
 
   $("[data-specs]").innerHTML = SPECS.map(([k, v]) => `<div><dt>${esc(tx(k))}</dt><dd>${esc(tx(v))}</dd></div>`).join("");
 

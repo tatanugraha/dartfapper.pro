@@ -9,7 +9,7 @@
 const SESSION_DAYS = 30;
 const STATE_COOKIE = "oauth_state";
 const CONTACTS_PER_HOUR = 5;
-const CONTACT_SERVICES = ["server", "moro", "custom", "other"];
+const CONTACT_SERVICES = ["server", "moro", "kafra", "custom", "other"];
 
 export default {
   async fetch(request, env, ctx) {
