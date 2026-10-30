@@ -81,7 +81,7 @@ const FAQ = [
 // UI text
 const DICT = {
   en: {
-    "nav.tour": "Tour", "nav.features": "Features", "nav.how": "How it works", "nav.specs": "Specs", "nav.pricing": "Pricing", "nav.back": "← dartfapper.pro",
+    "nav.tour": "Tour", "nav.features": "Features", "nav.how": "How it works", "nav.specs": "Specs", "nav.pricing": "Pricing",
     "cta.get": "Get MoRo", "cta.getFor": "Get MoRo for your server", "cta.see": "See it in action", "cta.discord": "Talk on Discord",
     "hero.kicker": "Mobile Ragnarok Engine",
     "hero.title": "Ragnarok Online,<br><span>made for your phone.</span>",
@@ -122,7 +122,7 @@ const DICT = {
     "foot.legal": "Built on roBrowserLegacy (GPL-3.0). Ragnarok Online is a trademark of Gravity Co., Ltd.; MoRo is not affiliated with Gravity."
   },
   id: {
-    "nav.tour": "Tur", "nav.features": "Fitur", "nav.how": "Cara kerja", "nav.specs": "Spesifikasi", "nav.pricing": "Harga", "nav.back": "← dartfapper.pro",
+    "nav.tour": "Tur", "nav.features": "Fitur", "nav.how": "Cara kerja", "nav.specs": "Spesifikasi", "nav.pricing": "Harga",
     "cta.get": "Pakai MoRo", "cta.getFor": "Pakai MoRo di server lo", "cta.see": "Lihat langsung", "cta.discord": "Ngobrol di Discord",
     "hero.kicker": "Mobile Ragnarok Engine",
     "hero.title": "Ragnarok Online,<br><span>dibikin buat HP.</span>",

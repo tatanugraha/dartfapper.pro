@@ -159,7 +159,6 @@ function applyStaticText() {
   const servers = SERVERS.filter((s) => s.kind !== "client");
   $$("[data-stat='servers']").forEach((el) => (el.textContent = servers.length));
   $$("[data-stat='online']").forEach((el) => (el.textContent = servers.filter((s) => s.status === "online").length));
-  toggler.setAttribute("aria-label", ui(navbar.classList.contains("active") ? "menu.close" : "menu.open"));
 }
 
 function render() {
@@ -172,18 +171,16 @@ function render() {
   observeReveal();
 }
 
-/* ---------- navbar mobile ---------- */
-const navbar = $("[data-navbar]");
-const toggler = $("[data-nav-toggler]");
-const setNav = (open) => {
-  navbar.classList.toggle("active", open);
-  toggler.classList.toggle("active", open);
-  toggler.setAttribute("aria-expanded", String(open));
-  toggler.setAttribute("aria-label", ui(open ? "menu.close" : "menu.open"));
-  document.body.classList.toggle("nav-active", open);
-};
-toggler.addEventListener("click", () => setNav(!navbar.classList.contains("active")));
-$$("[data-nav-link]").forEach((l) => l.addEventListener("click", () => setNav(false)));
+/* ---------- section rail (scroll spy) ---------- */
+const railLinks = $$("[data-rail-link]");
+const railSections = railLinks.map((l) => $(l.getAttribute("href")));
+const setRail = (id) => railLinks.forEach((l) => l.setAttribute("aria-current", String(l.getAttribute("href") === "#" + id)));
+if ("IntersectionObserver" in window) {
+  const spy = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) setRail(e.target.id); }),
+    { rootMargin: "-45% 0px -55% 0px" });
+  railSections.forEach((s) => s && spy.observe(s));
+}
+setRail("top");
 
 /* ---------- language buttons ---------- */
 $$("[data-lang-btn]").forEach((b) => b.addEventListener("click", () => {

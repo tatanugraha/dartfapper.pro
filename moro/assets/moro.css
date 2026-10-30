@@ -76,6 +76,9 @@ h1, h2, h3, .kicker, .btn, .nav, strong, .step-num, .big-num, .price-amount { fo
 .nav { position: fixed; inset: 0 0 auto; z-index: 20; padding-block: 12px; transition: background .25s ease, box-shadow .25s ease; }
 .nav.active { background: hsla(220,25%,4%,.88); backdrop-filter: blur(10px); box-shadow: 0 1px 0 var(--line); }
 .nav-row { display: flex; align-items: center; gap: 28px; }
+.nav-back { font-weight: 600; font-size: .85rem; white-space: nowrap; padding: 6px 12px; margin-right: -12px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); transition: color .2s, box-shadow .2s; }
+.nav-back:hover, .nav-back:focus-visible { color: var(--cyan); box-shadow: inset 0 0 0 1px var(--glow); }
+.nav-brand { flex-shrink: 0; }
 .nav-brand img { width: 96px; filter: drop-shadow(0 2px 8px hsla(0,0%,0%,.6)); }
 .nav-links { display: flex; gap: 4px; }
 .nav-links a { font-weight: 600; font-size: .92rem; padding: 8px 12px; color: var(--white); opacity: .85; transition: opacity .2s, color .2s; }
@@ -262,6 +265,8 @@ h1, h2, h3, .kicker, .btn, .nav, strong, .step-num, .big-num, .price-amount { fo
 @media (max-width: 640px) {
   .section { padding-block: 64px; }
   .nav-brand img { width: 76px; }
+  .nav-back { padding: 6px 10px; margin-right: -16px; }
+  .nav-back-text { display: none; }
   .btn-sm { padding: 9px 14px; font-size: .82rem; }
   .hero { padding-top: 100px; min-height: auto; }
   .hero-bg::after { background: linear-gradient(180deg, hsla(220,40%,4%,.7) 0%, hsla(220,40%,4%,.92) 50%, var(--bg) 100%); }
