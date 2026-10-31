@@ -162,6 +162,8 @@ const product=row=>({id:row.id,name:row.name,kafra:!!row.kafra,moro:!!row.moro,k
 // player module reports; the Worker refuses those calls for Basic servers, the dashboard shows an upgrade card instead.
 const proActions=new Set(['policy','modules']);
 const licensesSql='CREATE TABLE IF NOT EXISTS kafra_licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL, license_server TEXT NOT NULL, expires TEXT NOT NULL, max_online INTEGER NOT NULL DEFAULT 0, license TEXT NOT NULL, issued_by TEXT NOT NULL, issued_at INTEGER NOT NULL)';
+// Known GameShield.dll builds (Kafra Guard core), registered by the Super Admin by SHA-256 only; the DLL itself is never uploaded.
+const coreSql="CREATE TABLE IF NOT EXISTS kafra_core_versions (sha256 TEXT PRIMARY KEY, label TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', latest INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)";
 const planReady=new WeakSet();
 // Databases created before plans get the column once; servers that already ran Kafra Guard keep every feature (Pro).
 async function ensurePlan(env){
@@ -169,7 +171,7 @@ async function ensurePlan(env){
   try{await env.DB.prepare('SELECT kafra_plan FROM kafra_servers LIMIT 0').all();}
   catch{await env.DB.batch([env.DB.prepare("ALTER TABLE kafra_servers ADD COLUMN kafra_plan TEXT NOT NULL DEFAULT 'basic'"),
     env.DB.prepare("UPDATE kafra_servers SET kafra_plan='pro' WHERE kafra=1")]);}
-  await env.DB.prepare(licensesSql).run();planReady.add(env.DB);
+  await env.DB.batch([env.DB.prepare(licensesSql),env.DB.prepare(coreSql)]);planReady.add(env.DB);
 }
 // rAthena login-server license, same format as tools/license-gen.mjs: KG1.<b64url(json)>.<b64url(P-256 signature, IEEE-P1363)>.
 async function signLicense(env,{server,exp,max}){
@@ -207,6 +209,10 @@ async function gateFor(user,id,env){
   const row=await serverRow(user,id,env);if(!row?.kafra)return null;const plan=row.kafra_plan==='pro'?'pro':'basic';
   if(row.gate_url&&row.gate_key)return {url:row.gate_url,key:await unseal(env,row.gate_key,id),plan};
   return row.gate_url&&row.gate_url===envGate(env)&&env.KAFRA_GATE_KEY?{url:row.gate_url,key:env.KAFRA_GATE_KEY,plan}:{plan};
+}
+async function coreVersions(env){
+  return (await env.DB.prepare('SELECT sha256,label,notes,latest,created_at FROM kafra_core_versions ORDER BY created_at DESC').all()).results
+    .map(v=>({sha256:v.sha256,label:v.label,notes:v.notes,latest:!!v.latest,addedAt:v.created_at}));
 }
 // MoRo player activity (client/src/MoRo/core/activity.js): text/plain JSON without custom headers, so the
 // ingest key travels in the path (it ships inside the APK either way). One row per app start (sid).
@@ -344,6 +350,7 @@ async function adminRoutes(request,env,path){
     return json({servers:servers.map(s=>({...product(s),gateUrl:s.gate_url,builtIn:!!s.gate_url&&s.gate_url===envGate(env),moroPlan:s.moro_plan,moroExpires:s.moro_expires,moroKey:!!s.moro_key_hash,createdAt:s.created_at,
       owners:owners.filter(o=>o.server_id===s.id).map(o=>({username:o.username,createdAt:o.created_at}))}))});
   }
+  if(path==='/api/admin/core'&&request.method==='GET')return json({versions:await coreVersions(env)});
   if(request.method!=='POST')return json({error:'not_found'},404);
   let data;try{data=await body(request);}catch{return json({error:'invalid_request'},400);}
   const find=async()=>serverId.test(data.id??'')?env.DB.prepare('SELECT * FROM kafra_servers WHERE id=?').bind(data.id).first():null;
@@ -370,6 +377,22 @@ async function adminRoutes(request,env,path){
         protectionRestored=!!response?.ok;}catch{protectionRestored=false;}
     }
     return json({ok:true,plan,protectionRestored});
+  }
+  if(path==='/api/admin/core'){
+    if(!/^[a-f0-9]{64}$/.test(data.sha256??''))return json({error:'invalid_hash'},400);
+    const label=typeof data.label==='string'?text(data.label.trim(),40):null,notes=data.notes==null||data.notes===''?'':text(String(data.notes).trim(),200);
+    if(!label||notes===null||/[\x00-\x1f\x7f]/.test(label+notes))return json({error:'invalid_core_label'},400);
+    if(!await env.DB.prepare('SELECT sha256 FROM kafra_core_versions WHERE sha256=?').bind(data.sha256).first()&&
+      (await env.DB.prepare('SELECT COUNT(*) AS n FROM kafra_core_versions').first()).n>=100)return json({error:'core_limit'},409);
+    // Only one version is "latest"; marking a new one demotes the previous.
+    const latest=data.latest===true;
+    await env.DB.batch([...(latest?[env.DB.prepare('UPDATE kafra_core_versions SET latest=0')]:[]),
+      env.DB.prepare('INSERT INTO kafra_core_versions (sha256,label,notes,latest,created_at) VALUES (?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET label=excluded.label,notes=excluded.notes,latest=MAX(latest,excluded.latest)').bind(data.sha256,label,notes,latest?1:0,Date.now())]);
+    return json({versions:await coreVersions(env)});
+  }
+  if(path==='/api/admin/core/delete'){
+    if(!/^[a-f0-9]{64}$/.test(data.sha256??''))return json({error:'invalid_hash'},400);
+    await env.DB.prepare('DELETE FROM kafra_core_versions WHERE sha256=?').bind(data.sha256).run();return json({versions:await coreVersions(env)});
   }
   if(path==='/api/admin/license'){
     const row=await find();if(!row?.kafra)return json({error:'invalid_server'},400);
@@ -514,10 +537,10 @@ export async function adminApi(request,env){
   if(path.startsWith('/api/admin/'))return user.role==='super_admin'?adminRoutes(request,env,path):json({error:'forbidden'},403);
   if(path==='/api/moro'&&request.method==='GET')return moroDashboard(user,url.searchParams.get('server')??user.serverId,env);
   // Client limits, kick and ban live on the gate; owners manage their own server, the Super Admin every server.
-  const gateActions={'/api/policy':'policy','/api/kick':'kick','/api/ban':'ban','/api/unban':'unban','/api/bans':'bans','/api/rules':'rules','/api/rule':'rule','/api/unrule':'unrule','/api/builds':'builds','/api/build':'build','/api/unbuild':'unbuild'};
+  const gateActions={'/api/policy':'policy','/api/kick':'kick','/api/ban':'ban','/api/unban':'unban','/api/bans':'bans','/api/rules':'rules','/api/rule':'rule','/api/unrule':'unrule','/api/builds':'builds','/api/build':'build','/api/unbuild':'unbuild','/api/versions':'versions'};
   if(Object.hasOwn(gateActions,path)){
     const action=gateActions[path],write=request.method==='POST';
-    const allowed=action==='policy'?['GET','POST']:['bans','rules','builds'].includes(action)?['GET']:['POST'];if(!allowed.includes(request.method))return json({error:'not_found'},404);
+    const allowed=action==='policy'?['GET','POST']:['bans','rules','builds','versions'].includes(action)?['GET']:['POST'];if(!allowed.includes(request.method))return json({error:'not_found'},404);
     let data=null;if(write){try{data=await body(request,512);}catch{return json({error:'invalid_request'},400);}}
     let payload=null;
     // Limits and the protection switch are saved separately; either one may be sent alone.
@@ -554,6 +577,7 @@ export async function adminApi(request,env){
       if(response.status===404&&action==='unbuild')return json({error:'build_not_approved'},404);
       // Gates older than build approvals answer 404 (owner read) or 401 (unknown owner write).
       if([401,404].includes(response.status)&&['builds','build'].includes(action))return json({error:'builds_unsupported'},400);
+      if(response.status===404&&action==='versions')return json({error:'versions_unsupported'},400);
       // A gate older than the protection switch rejects the unknown field.
       if(response.status===400)return json({error:action==='policy'?(payload?.protection!==undefined?'protection_unsupported':'invalid_limits'):'invalid_request'},400);
       if(!response.ok)return unavailable('HTTP '+response.status);
@@ -564,6 +588,11 @@ export async function adminApi(request,env){
         return json({published:Array.isArray(result.published)?result.published.filter(hash):null,
           approved:(Array.isArray(result.approved)?result.approved:[]).filter(b=>hash(b?.build)).slice(0,200).map(b=>({build:b.build,label:String(b.label??'').slice(0,100),approvedAt:b.approvedAt??null})),
           pending:(Array.isArray(result.pending)?result.pending:[]).filter(b=>hash(b?.build)).slice(0,50).map(b=>({build:b.build,firstSeen:b.firstSeen??null,lastSeen:b.lastSeen??null,attempts:Number(b.attempts)||0}))});}
+      // GameShield.dll per player, labelled from the Super Admin's catalog; 'latest' is the version players should run.
+      if(action==='versions'){const known=new Map((await coreVersions(env)).map(v=>[v.sha256,v])),latest=[...known.values()].find(v=>v.latest)??null;
+        const versions=(Array.isArray(result.versions)?result.versions:[]).slice(0,200).filter(v=>v&&(v.sha256===null||/^[a-f0-9]{64}$/.test(v.sha256))).map(v=>{const k=known.get(v.sha256);
+          return {sha256:v.sha256,label:k?.label??null,players:Number(v.players)||0,status:v.sha256===null?'unreported':k?.latest?'latest':k?'outdated':'unlisted'};});
+        return json({players:Number(result.players)||0,latest:latest&&{sha256:latest.sha256,label:latest.label},versions});}
       if(action==='rules')return json({rules:(Array.isArray(result.rules)?result.rules:[]).slice(0,5000).map(r=>({sha256:String(r.sha256),name:String(r.name??''),verdict:r.verdict==='block'?'block':'allow',note:String(r.note??''),addedAt:r.addedAt??null}))});
       return json({ok:true,endedSessions:result.endedSessions??(action==='kick'?1:0)});
     }catch(error){return unavailable(error);}

@@ -315,3 +315,23 @@ test('A database created before plans gets the column once and keeps existing Ka
   const admin=await login(env),{servers}=await (await adminApi(request('admin/servers',undefined,admin),env)).json();
   assert.deepEqual(servers.map(s=>[s.name,s.kafraPlan]),[['Live RO','pro'],['New RO','basic']]);
 });
+test('Super Admin labels GameShield.dll versions; every plan sees which version its players run',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
+  const old='1'.repeat(64),current='2'.repeat(64),stray='3'.repeat(64);
+  assert.equal((await adminApi(request('admin/core',{sha256:old,label:'1.0 (Oct)'},admin),env)).status,200);
+  let list=await (await adminApi(request('admin/core',{sha256:current,label:'1.1 hardened',notes:'Pentest fixes',latest:true},admin),env)).json();
+  assert.deepEqual(list.versions.map(v=>[v.label,v.latest]).sort(),[['1.0 (Oct)',false],['1.1 hardened',true]]);
+  for(const body of [{sha256:'x',label:'a'},{sha256:old,label:''},{sha256:old,label:'a\nb'},{sha256:old,label:'x'.repeat(41)}])
+    assert.equal((await adminApi(request('admin/core',body,admin),env)).status,400,JSON.stringify(body));
+  assert.equal((await adminApi(request('admin/core',{sha256:old,label:'x'},owner),env)).status,403);
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',plan:'basic'},admin),env)).status,200);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});let seen,status=200;
+  globalThis.fetch=async url=>{seen=String(url);if(seen.endsWith('/policy'))return new Response('{}');
+    return new Response(JSON.stringify({players:6,versions:[{sha256:current,players:3},{sha256:old,players:1},{sha256:stray,players:1},{sha256:null,players:1},{sha256:'bad'}]}),{status});};
+  const versions=await (await adminApi(request('versions?server='+own,undefined,owner),env)).json();
+  assert.equal(seen,'https://gate.sovereign.test/internal/owner/versions');
+  assert.deepEqual(versions,{players:6,latest:{sha256:current,label:'1.1 hardened'},versions:[
+    {sha256:current,label:'1.1 hardened',players:3,status:'latest'},{sha256:old,label:'1.0 (Oct)',players:1,status:'outdated'},
+    {sha256:stray,label:null,players:1,status:'unlisted'},{sha256:null,label:null,players:1,status:'unreported'}]});
+  status=404;assert.equal((await (await adminApi(request('versions?server='+own,undefined,owner),env)).json()).error,'versions_unsupported');
+  list=await (await adminApi(request('admin/core/delete',{sha256:old},admin),env)).json();assert.deepEqual(list.versions.map(v=>v.sha256),[current]);
+});

@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS kafra_servers (
 -- Older databases get the column from the Worker on first use; servers already running Kafra Guard start on Pro.
 -- rAthena login-server licenses issued by the Super Admin (signed with the KAFRA_LICENSE_KEY secret); history only.
 CREATE TABLE IF NOT EXISTS kafra_licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL, license_server TEXT NOT NULL, expires TEXT NOT NULL, max_online INTEGER NOT NULL DEFAULT 0, license TEXT NOT NULL, issued_by TEXT NOT NULL, issued_at INTEGER NOT NULL);
+-- Known GameShield.dll builds (Kafra Guard core) by SHA-256, labelled by the Super Admin; one may be marked latest.
+CREATE TABLE IF NOT EXISTS kafra_core_versions (sha256 TEXT PRIMARY KEY, label TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', latest INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
 -- Server Owner accounts sit below the env-configured Super Admin; read-only access to one server.
 CREATE TABLE IF NOT EXISTS kafra_owners (
   username TEXT PRIMARY KEY,

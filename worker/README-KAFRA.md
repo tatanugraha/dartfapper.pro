@@ -144,6 +144,17 @@ klik **Approve**. Butuh gate versi baru + tabel `kafra_builds`
 (`server/gate-upgrade-builds.sql` di repo kafra-shield). Tanpa tabel itu approval
 tetap jalan, tapi hilang saat gate restart.
 
+## Versi Kafra Guard core (GameShield.dll)
+
+Super Admin → **Kafra Guard core versions**: pilih `GameShield.dll` yang dibagikan ke
+player (file hanya di-hash di browser, tidak di-upload), beri nama versi, centang
+**latest**. Daftar ini disimpan di `kafra_core_versions` (dibuat otomatis oleh Worker).
+Di halaman Kafra Guard tiap server, panel **Kafra Guard core** menampilkan berapa
+player online yang memakai versi terbaru, versi lama, atau DLL yang tidak ada di daftar.
+Data per player berasal dari laporan modul client (muncul ±1 menit setelah login).
+Butuh gate dengan endpoint `/internal/owner/versions`; gate lama menampilkan pesan
+"Update the gate on the VPS".
+
 ## Lisensi rAthena dari dashboard
 
 Manage → **rAthena license** menandatangani lisensi untuk module login-server
