@@ -66,7 +66,7 @@ test('Products are opt-in: an owner sees nothing until Kafra Guard or Mobile RO 
   const {id}=await (await adminApi(request('admin/servers',{name:'Bare RO'},admin),env)).json();
   await adminApi(request('admin/owners',{username:'bare.owner',password:'owner-pass-1234',serverId:id},admin),env);
   const owner=(await adminApi(request('login',{username:'bare.owner',password:'owner-pass-1234'}),env)).headers.get('Set-Cookie').split(';')[0];
-  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers,[{id,name:'Bare RO',kafra:false,moro:false,kafraPlan:'basic'}]);
+  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers,[{id,name:'Bare RO',kafra:false,moro:false,kafraPlan:'basic',limits:{realms:1,allowRules:10,maxOnline:50}}]);
   assert.equal((await adminApi(request('sessions',undefined,owner),env)).status,404);assert.equal((await adminApi(request('moro',undefined,owner),env)).status,404);
   assert.equal((await adminApi(request('admin/servers/kafra',{id,enabled:true,gateUrl:'https://gate.bare.test/',gateKey:''},admin),env)).status,400);
 });
@@ -291,6 +291,9 @@ test('Kafra Guard Basic: protection switch, client limits and player modules nee
   assert.deepEqual(builds.pending.map(b=>b.build),['b'.repeat(64)]);assert.equal(builds.pending[0].attempts,3);
   assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'New patch'},owner),env)).status,200);
   assert.deepEqual(JSON.parse(calls.at(-1).body),{build:'b'.repeat(64),label:'New patch'});assert.equal(calls.length,before+2);
+  // Tying a build to a sub-server is Pro (multi-server); on Pro the realm is normalised and sent.
+  assert.equal((await (await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'Classic',realm:'classic'},owner),env)).json()).error,'pro_required_realms');
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',gateKey:'',plan:'pro'},admin),env)).status,200);
   assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'Classic',realm:' Classic '},owner),env)).status,200);
   assert.deepEqual(JSON.parse(calls.at(-1).body),{build:'b'.repeat(64),label:'Classic',realm:'classic'});
   assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),realm:'two words'},owner),env)).status,400);
@@ -338,4 +341,25 @@ test('Super Admin labels GameShield.dll versions; every plan sees which version 
     {sha256:stray,label:null,players:1,status:'unlisted'},{sha256:null,label:null,players:1,status:'unreported'}]});
   status=404;assert.equal((await (await adminApi(request('versions?server='+own,undefined,owner),env)).json()).error,'versions_unsupported');
   list=await (await adminApi(request('admin/core/delete',{sha256:old},admin),env)).json();assert.deepEqual(list.versions.map(v=>v.sha256),[current]);
+});
+test('Kafra Guard Basic limits: one login server, 50 players online, 10 allowed DLLs; Pro lifts them',async t=>{
+  const {generateKeyPairSync}=await import('node:crypto');const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+  const env={...await fixture(t),KAFRA_LICENSE_KEY:keys.privateKey.export({type:'pkcs8',format:'pem'})},{admin,own,owner}=await ownerSetup(env);
+  const plan=p=>adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',plan:p},admin),env);
+  const license=body=>adminApi(request('admin/license',{id:own,server:'sov',expiresAt:'2099-12-31',...body},admin),env);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});let rules=[];const sent=[];
+  globalThis.fetch=async(url,init)=>{if(String(url).endsWith('/rules'))return new Response(JSON.stringify({rules}));sent.push(String(url));return new Response('{}');};
+  assert.equal((await plan('basic')).status,200);
+  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers[0].limits,{realms:1,allowRules:10,maxOnline:50});
+  assert.equal((await (await license({realms:['renewal','classic'],maxOnline:50})).json()).error,'pro_required_realms');
+  for(const maxOnline of [0,51])assert.equal((await (await license({maxOnline})).json()).error,'basic_max_online',String(maxOnline));
+  assert.equal((await license({maxOnline:50,realms:['renewal']})).status,201);
+  const hash=i=>i.toString(16).padStart(64,'0'),rule=(sha256,verdict='allow')=>adminApi(request('rule',{server:own,sha256,name:'a.dll',verdict},owner),env);
+  rules=Array.from({length:10},(_,i)=>({sha256:hash(i+1),verdict:'allow'}));
+  assert.equal((await (await rule(hash(99))).json()).error,'allow_rule_limit');
+  assert.equal((await rule(hash(3))).status,200,'editing an allowed DLL is not a new one');
+  assert.equal((await rule(hash(99),'block')).status,200,'block rules are not capped');
+  assert.equal((await plan('pro')).status,200);
+  assert.equal((await rule(hash(99))).status,200);
+  assert.equal((await license({realms:['renewal','classic'],maxOnline:0})).status,201);
 });

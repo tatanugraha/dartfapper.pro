@@ -157,9 +157,12 @@ function gateUrl(value,env){
   return gate;
 }
 function httpsUrl(value){let url;try{url=new URL(value);}catch{return null;}return url.protocol==='https:'&&!url.username&&!url.password&&value.length<=500?url.href:null;}
-const product=row=>({id:row.id,name:row.name,kafra:!!row.kafra,moro:!!row.moro,kafraPlan:row.kafra_plan==='pro'?'pro':'basic'});
 // Kafra Guard plans: 'basic' (Kafra Guard) and 'pro' (Kafra Guard Pro). Pro adds the protection switch, client limits and
 // player module reports; the Worker refuses those calls for Basic servers, the dashboard shows an upgrade card instead.
+// Everything a plan allows lives here: sub-servers per license (realms), allowed-DLL rules, players online per license.
+const planLimits={basic:{realms:1,allowRules:10,maxOnline:50},pro:{realms:16,allowRules:5000,maxOnline:100000}};
+const limitsOf=plan=>planLimits[plan==='pro'?'pro':'basic'];
+const product=row=>{const kafraPlan=row.kafra_plan==='pro'?'pro':'basic';return {id:row.id,name:row.name,kafra:!!row.kafra,moro:!!row.moro,kafraPlan,limits:limitsOf(kafraPlan)};};
 const proActions=new Set(['policy','modules']);
 const licensesSql='CREATE TABLE IF NOT EXISTS kafra_licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL, license_server TEXT NOT NULL, expires TEXT NOT NULL, max_online INTEGER NOT NULL DEFAULT 0, license TEXT NOT NULL, issued_by TEXT NOT NULL, issued_at INTEGER NOT NULL)';
 // Known GameShield.dll builds (Kafra Guard core), registered by the Super Admin by SHA-256 only; the DLL itself is never uploaded.
@@ -403,6 +406,10 @@ async function adminRoutes(request,env,path){
     const max=data.maxOnline??0;if(!Number.isSafeInteger(max)||max<0||max>100000)return json({error:'invalid_max_online'},400);
     const realms=data.realms??[];
     if(!Array.isArray(realms)||realms.length>16||realms.some(r=>typeof r!=='string'||!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(r))||new Set(realms).size!==realms.length)return json({error:'invalid_realms'},400);
+    // Basic covers one login server and up to 50 players online (0 = no limit is Pro only).
+    const limits=limitsOf(row.kafra_plan);
+    if(realms.length>limits.realms)return json({error:'pro_required_realms'},403);
+    if(max>limits.maxOnline||(max===0&&limits.maxOnline<100000))return json({error:'basic_max_online',limit:limits.maxOnline},403);
     let license;try{license=await signLicense(env,{server,exp:data.expiresAt,max,realms});}catch{return json({error:'license_key_not_configured'},503);}
     await env.DB.prepare('INSERT INTO kafra_licenses (server_id,license_server,expires,max_online,license,issued_by,issued_at) VALUES (?,?,?,?,?,?,?)').bind(row.id,server,data.expiresAt,max,license,superUser(env),Date.now()).run();
     return json({license,server,realms,expiresAt:data.expiresAt,maxOnline:max},201);
@@ -576,7 +583,18 @@ export async function adminApi(request,env){
     let target;try{target=await gateFor(user,id??(user.role==='server_owner'?user.serverId:'default'),env);}catch{return json({error:'data_key_not_configured'},503);}
     if(!target)return json({error:'server_not_found'},404);
     if(proActions.has(action)&&target.plan!=='pro')return json({error:'pro_required'},403);
+    const limits=limitsOf(target.plan);
+    // Tying builds to sub-servers is the multi-server feature (Pro).
+    if(action==='build'&&payload.realm&&limits.realms<2)return json({error:'pro_required_realms'},403);
     const gate=target.url&&target.key?gateUrl(target.url,env):null;if(!gate)return json({error:'gate_not_configured'},503);
+    // Allowed-DLL rules are capped per plan; block rules are not. Counted on the gate, an existing rule can be edited.
+    if(action==='rule'&&data.verdict==='allow'&&limits.allowRules<5000){
+      try{const response=await fetch(new URL('/internal/owner/rules',gate),{headers:{Authorization:'Bearer '+target.key},redirect:'manual',signal:AbortSignal.timeout(4000)});
+        if(!response.ok)return unavailable('HTTP '+response.status);
+        const rules=JSON.parse((await response.text()).slice(0,4194304)).rules??[];
+        if(rules.filter(r=>r?.verdict==='allow'&&r.sha256!==data.sha256).length>=limits.allowRules)return json({error:'allow_rule_limit',limit:limits.allowRules},403);
+      }catch(error){return unavailable(error);}
+    }
     const init={headers:{Authorization:'Bearer '+target.key,...(payload?{'Content-Type':'application/json'}:{})},redirect:'manual',signal:AbortSignal.timeout(4000),
       ...(payload?{method:'POST',body:JSON.stringify(payload)}:{})};
     try{

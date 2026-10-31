@@ -135,6 +135,19 @@ yang turun dari Pro ke basic otomatis dikembalikan ke protection ON (best effort
 Saat Worker baru pertama jalan, kolom `kafra_plan` ditambahkan otomatis dan
 server yang sudah memakai Kafra Guard diset **Pro**, supaya tidak ada fitur yang hilang.
 
+Batas per paket (satu tabel `planLimits` di `worker/src/kafra-admin.js`):
+
+| | Kafra Guard (basic) | Kafra Guard Pro |
+|---|---|---|
+| Sub-server per lisensi (realm) | 1 | sampai 16 |
+| Max players online di lisensi | 1–50 | bebas (0 = tanpa batas) |
+| DLL di whitelist (Allow) | 10 | tanpa batas (block tidak dibatasi) |
+| Build per sub-server (realm) | tidak | ya |
+
+Batas ini ditegakkan oleh Worker. Owner yang memegang owner key gate sendiri
+(gate self-hosted) masih bisa menambah rule langsung ke gate; batas players online
+ditegakkan oleh module login lewat lisensi yang ditandatangani.
+
 ## Client builds (approve build baru)
 
 Gate hanya menerima build (hash EXE + DLL) yang dipublish lewat profile atau
