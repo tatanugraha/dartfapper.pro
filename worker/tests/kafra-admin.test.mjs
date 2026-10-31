@@ -142,15 +142,18 @@ test('client limits are read and set on the owner gate; other servers and bad va
   const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];
   globalThis.fetch=async(url,init)=>{seen.push({url:String(url),method:init.method??'GET',auth:init.headers.Authorization,body:init.body});
     return new Response(JSON.stringify(init.body?{...JSON.parse(init.body),networkPrefix:24,extra:'x'}:{maxPerDevice:2,maxPerNetwork:0,networkPrefix:24}));};
-  assert.deepEqual(await (await adminApi(request('policy?server='+own,undefined,owner),env)).json(),{maxPerDevice:2,maxPerNetwork:0,networkPrefix:24});
+  assert.deepEqual(await (await adminApi(request('policy?server='+own,undefined,owner),env)).json(),{maxPerDevice:2,maxPerNetwork:0,networkPrefix:24,protection:true});
   assert.equal(seen[0].url,'https://gate.sovereign.test/internal/owner/policy');assert.equal(seen[0].auth,'Bearer '+gateKey);
   const saved=await adminApi(request('policy',{server:own,maxPerDevice:1,maxPerNetwork:4},owner),env);
-  assert.deepEqual(await saved.json(),{maxPerDevice:1,maxPerNetwork:4,networkPrefix:24});assert.equal(seen[1].method,'POST');assert.equal(seen[1].body,'{"maxPerDevice":1,"maxPerNetwork":4}');
-  for(const bad of [{maxPerDevice:0,maxPerNetwork:0},{maxPerDevice:11,maxPerNetwork:0},{maxPerDevice:1,maxPerNetwork:101},{maxPerDevice:'1',maxPerNetwork:0}])
+  assert.deepEqual(await saved.json(),{maxPerDevice:1,maxPerNetwork:4,networkPrefix:24,protection:true});assert.equal(seen[1].method,'POST');assert.equal(seen[1].body,'{"maxPerDevice":1,"maxPerNetwork":4}');
+  const off=await adminApi(request('policy',{server:own,protection:false},owner),env);
+  assert.equal((await off.json()).protection,false);assert.equal(seen[2].body,'{"protection":false}');
+  for(const bad of [{maxPerDevice:0,maxPerNetwork:0},{maxPerDevice:11,maxPerNetwork:0},{maxPerDevice:1,maxPerNetwork:101},{maxPerDevice:'1',maxPerNetwork:0},{protection:'off'},{protection:false,maxPerDevice:1}])
     assert.equal((await adminApi(request('policy',{server:own,...bad},owner),env)).status,400);
   assert.equal((await adminApi(request('policy',{server:other,maxPerDevice:1,maxPerNetwork:0},owner),env)).status,404);
+  assert.equal((await adminApi(request('policy',{server:other,protection:false},owner),env)).status,404);
   assert.equal((await adminApi(request('policy?server='+other,undefined,owner),env)).status,404);
-  assert.equal(seen.length,2);
+  assert.equal(seen.length,3);
 });
 test('kick, ban and unban go to the owner gate only, with validated input',async t=>{const env=await fixture(t),{own,other,owner}=await ownerSetup(env);
   const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];

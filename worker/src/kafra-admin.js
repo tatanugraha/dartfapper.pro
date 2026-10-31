@@ -476,9 +476,12 @@ export async function adminApi(request,env){
     const allowed=action==='policy'?['GET','POST']:['bans','rules'].includes(action)?['GET']:['POST'];if(!allowed.includes(request.method))return json({error:'not_found'},404);
     let data=null;if(write){try{data=await body(request,512);}catch{return json({error:'invalid_request'},400);}}
     let payload=null;
-    if(action==='policy'&&write){const {maxPerDevice,maxPerNetwork}=data;
-      if(!Number.isSafeInteger(maxPerDevice)||maxPerDevice<1||maxPerDevice>10||!Number.isSafeInteger(maxPerNetwork)||maxPerNetwork<0||maxPerNetwork>100)return json({error:'invalid_limits'},400);
-      payload={maxPerDevice,maxPerNetwork};}
+    // Limits and the protection switch are saved separately; either one may be sent alone.
+    if(action==='policy'&&write){const {maxPerDevice,maxPerNetwork,protection}=data;payload={};
+      if(protection!==undefined){if(typeof protection!=='boolean')return json({error:'invalid_protection'},400);payload.protection=protection;}
+      if(maxPerDevice!==undefined||maxPerNetwork!==undefined||protection===undefined){
+        if(!Number.isSafeInteger(maxPerDevice)||maxPerDevice<1||maxPerDevice>10||!Number.isSafeInteger(maxPerNetwork)||maxPerNetwork<0||maxPerNetwork>100)return json({error:'invalid_limits'},400);
+        Object.assign(payload,{maxPerDevice,maxPerNetwork});}}
     if(action==='kick'){if(!/^[a-f0-9]{32}$/.test(data.id??''))return json({error:'invalid_id'},400);payload={id:data.id};}
     if(action==='ban'||action==='unban'){if(!/^[a-f0-9]{64}$/.test(data.deviceId??''))return json({error:'invalid_device'},400);payload={deviceId:data.deviceId};}
     // Module rules by SHA-256: the browser hashes the DLL locally; only name, hash and note reach the gate.
@@ -501,7 +504,7 @@ export async function adminApi(request,env){
       if(response.status===400)return json({error:action==='policy'?'invalid_limits':'invalid_request'},400);
       if(!response.ok)return unavailable('HTTP '+response.status);
       const result=JSON.parse((await response.text()).slice(0,action==='rules'?4194304:131072));
-      if(action==='policy')return json({maxPerDevice:result.maxPerDevice,maxPerNetwork:result.maxPerNetwork,networkPrefix:result.networkPrefix});
+      if(action==='policy')return json({maxPerDevice:result.maxPerDevice,maxPerNetwork:result.maxPerNetwork,networkPrefix:result.networkPrefix,protection:result.protection!==false});
       if(action==='bans')return json({bans:(Array.isArray(result.bans)?result.bans:[]).slice(0,500).map(b=>({deviceId:String(b.deviceId),reason:String(b.reason??''),bannedAt:b.bannedAt??null}))});
       if(action==='rules')return json({rules:(Array.isArray(result.rules)?result.rules:[]).slice(0,5000).map(r=>({sha256:String(r.sha256),name:String(r.name??''),verdict:r.verdict==='block'?'block':'allow',note:String(r.note??''),addedAt:r.addedAt??null}))});
       return json({ok:true,endedSessions:result.endedSessions??(action==='kick'?1:0)});

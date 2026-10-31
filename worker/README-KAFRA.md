@@ -111,6 +111,15 @@ Tidak ada deployment, DNS change, migrasi D1 remote atau koneksi VPS yang
 dilakukan oleh implementasi lokal ini. Deploy Worker lama tidak otomatis
 menerbitkan panel baru. Push website juga bukan deployment Worker owner.
 
+## Disable protection (mode tes)
+
+Panel **Protection** di dashboard Kafra Guard mematikan proteksi per server
+(disimpan di `kafra_policy`, nama `protection`, 1/0). Saat off, client tetap
+menampilkan splash lalu langsung masuk game tanpa handshake gate, heartbeat
+atau laporan modul, dan `/internal/authorize` gate mengizinkan semua login.
+Berlaku untuk game yang dibuka setelah diubah; client yang sedang berjalan
+tetap pada modenya sampai di-restart. Butuh gate + GameShield.dll versi baru.
+
 ## Data yang ditampilkan
 
 Sesi aktif, IP yang dilihat gate, unique ID perangkat bernamespace, build hash,
