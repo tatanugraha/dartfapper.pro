@@ -168,6 +168,32 @@ Data per player berasal dari laporan modul client (muncul ±1 menit setelah logi
 Butuh gate dengan endpoint `/internal/owner/versions`; gate lama menampilkan pesan
 "Update the gate on the VPS".
 
+## Splash art (Pro)
+
+Server Pro bisa memakai gambar splash sendiri di layar start game, dengan badge kecil
+"Powered by Kafra Guard". Splash juga punya progress bar hijau dan tertutup begitu cek gate
+dan download gambar selesai (bukan lagi tetap 5 detik).
+
+- **Owner** (halaman Kafra Guard → **Splash art**): upload PNG tepat **640 × 480**, maks 900 KB.
+  Worker memeriksa setiap chunk dan CRC, lalu membangun ulang PNG (hanya IHDR + IDAT + IEND), jadi
+  teks/EXIF/data yang ditempel di belakang file dibuang. Status jadi *pending*; pemain tetap
+  memakai gambar lama sampai di-approve. Tombol **Send to gate again** mengirim ulang ke gate,
+  **Remove art** menghapusnya (pemain kembali ke gambar bawaan). Server Basic melihat kartu upgrade.
+- **Super Admin** (Servers & owners → **Splash art review**): lihat preview, **Approve** atau
+  **Reject** + catatan. Approve hanya untuk branding server itu sendiri, tidak ofensif/menyesatkan.
+  Approve menandatangani gambar (ECDSA P-256 dengan `KAFRA_LICENSE_KEY`, terikat ke host gate
+  server itu) dan mengirimnya ke gate. Tidak ada auto-approve.
+- **Cek malware (opsional)**: bila secret `VIRUSTOTAL_API_KEY` di-set, hash SHA-256 upload asli
+  dicek di VirusTotal; malicious/suspicious > 0 ditolak (`image_flagged`). Hanya hash yang dikirim,
+  file tidak pernah di-upload ke VirusTotal.
+  `npx wrangler secret put VIRUSTOTAL_API_KEY --config worker/wrangler.kafra.jsonc`
+- Server yang turun ke Basic otomatis dihapus splash-nya dari gate (best effort).
+
+Butuh: tabel D1 `kafra_splash` (ada di `worker/kafra-schema.sql`, jalankan ulang langkah 2 deploy),
+gate dengan `server/gate-upgrade-splash.sql` + `server/*.mjs` baru (repo kafra-shield), dan
+`GameShield.dll` baru. DLL baru = build hash baru, jadi owner perlu publish ulang lewat
+KafraGuardConfig atau approve di Client builds. Detail: `docs/PHASE3-SPLASH.md` (repo kafra-shield).
+
 ## Lisensi rAthena dari dashboard
 
 Manage → **rAthena license** menandatangani lisensi untuk module login-server

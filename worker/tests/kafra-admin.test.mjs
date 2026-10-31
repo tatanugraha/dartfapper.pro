@@ -282,7 +282,7 @@ test('Kafra Guard Basic: protection switch, client limits and player modules nee
     if(String(url).endsWith('/internal/owner/builds'))return new Response(JSON.stringify({published:['a'.repeat(64)],approved:[],pending:[{build:'b'.repeat(64),firstSeen:'2026-10-31T00:00:00Z',lastSeen:'2026-10-31T00:00:00Z',attempts:3},{build:'not-a-hash'}]}));
     return new Response(JSON.stringify({maxPerDevice:2,maxPerNetwork:0,networkPrefix:24,protection:true,approved:'x'}));};
   const down=await (await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',gateKey:'',plan:'basic'},admin),env)).json();
-  assert.equal(down.plan,'basic');assert.equal(down.protectionRestored,true);assert.equal(calls.at(-1).body,'{"protection":true}');
+  assert.equal(down.plan,'basic');assert.equal(down.protectionRestored,true);assert.deepEqual(calls.slice(-2).map(c=>[c.url.split('/').pop(),c.body]),[['policy','{"protection":true}'],['splash','{"clear":true}']]);
   assert.equal((await (await adminApi(request('me',undefined,owner),env)).json()).servers[0].kafraPlan,'basic');
   for(const [path,body] of [['policy?server='+own],['policy',{server:own,protection:false}],['policy',{server:own,maxPerDevice:1,maxPerNetwork:0}],['modules?server='+own+'&id='+'a'.repeat(32)]]){
     const response=await adminApi(request(path,body,owner),env);assert.equal(response.status,403,path);assert.equal((await response.json()).error,'pro_required');}
@@ -415,4 +415,34 @@ test('Super Admin lists owner tools for the install page; every signed-in user c
   assert.equal((await adminApi(request('admin/downloads',{kind:'config',version:'1',url:'https://a.test/',sha256},member),env)).status,403);
   assert.equal((await adminApi(request('downloads'),env)).status,401);
   assert.deepEqual((await (await adminApi(request('admin/downloads/delete',{id:item.id},admin),env)).json()).downloads,[]);
+});
+test('Pro splash art: checked and rebuilt on upload, Super Admin approves, signed for the gate host and pushed',async t=>{
+  const {generateKeyPairSync,verify,createHash}=await import('node:crypto'),{deflateSync}=await import('node:zlib');const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+  const env={...await fixture(t),KAFRA_LICENSE_KEY:keys.privateKey.export({type:'pkcs8',format:'pem'})},{admin,own,owner}=await ownerSetup(env);
+  const crcT=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;return c>>>0;});
+  const crc=b=>{let c=0xffffffff;for(const x of b)c=crcT[(c^x)&255]^(c>>>8);return (c^0xffffffff)>>>0;};
+  const chunk=(type,d)=>{const b=Buffer.alloc(12+d.length);b.writeUInt32BE(d.length);b.write(type,4);d.copy(b,8);b.writeUInt32BE(crc(b.subarray(4,8+d.length)),8+d.length);return b;};
+  const png=({w=640,tail=Buffer.alloc(0)}={})=>{const ih=Buffer.alloc(13);ih.writeUInt32BE(w);ih.writeUInt32BE(480,4);ih[8]=8;ih[9]=2;
+    return Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),chunk('IHDR',ih),chunk('tEXt',Buffer.from('a\0b')),chunk('IDAT',deflateSync(Buffer.alloc(480*(1+w*3)))),chunk('IEND',Buffer.alloc(0)),tail]).toString('base64');};
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const pushed=[];
+  globalThis.fetch=async(url,init)=>{pushed.push([String(url),init.body]);return new Response('{}');};
+  const upload=(image,cookie=owner)=>adminApi(request('splash',{server:own,image},cookie),env);
+  for(const [image,error] of [[png({w:641}),'image_size'],[png({tail:Buffer.from('MZ')}),'invalid_image'],['bm90IGEgcG5n','invalid_image']])assert.equal((await (await upload(image)).json()).error,error);
+  const sent=await upload(png());assert.equal(sent.status,201);const {splash}=await sent.json();
+  assert.equal(splash.status,'pending');assert.equal(splash.scan,'skipped');assert.ok(!Buffer.from(splash.image.split(',')[1],'base64').includes('tEXt'),'ancillary chunks are dropped');
+  assert.equal((await adminApi(request('admin/splash',undefined,owner),env)).status,403);
+  const queue=await (await adminApi(request('admin/splash',undefined,admin),env)).json();assert.equal(queue.splash[0].server,own);assert.equal(queue.splash[0].status,'pending');
+  const approved=await (await adminApi(request('admin/splash/review',{server:own,approve:true},admin),env)).json();assert.deepEqual(approved,{ok:true,status:'approved',published:true});
+  const [url,body]=pushed.at(-1),art=JSON.parse(body);assert.equal(url,'https://gate.sovereign.test/internal/owner/splash');
+  const image=Buffer.from(art.image,'base64');assert.equal(createHash('sha256').update(image).digest('hex'),splash.sha256);
+  assert.ok(verify('sha256',Buffer.from('KGS1\ngate.sovereign.test\n'+splash.sha256),{key:keys.publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(art.signature,'base64')));
+  const view=await (await adminApi(request('splash?server='+own,undefined,owner),env)).json();assert.equal(view.splash.status,'approved');assert.ok(view.splash.publishedAt);
+  assert.equal((await adminApi(request('admin/splash/review',{server:own,approve:false,note:'Logo shows a third-party brand'},admin),env)).status,200);
+  assert.equal((await (await adminApi(request('splash?server='+own,undefined,owner),env)).json()).splash.note,'Logo shows a third-party brand');
+  assert.equal((await (await adminApi(request('splash/publish',{server:own},owner),env)).json()).error,'splash_not_approved');
+  // Basic: no upload; moving to Basic clears the gate.
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',plan:'basic'},admin),env)).status,200);
+  assert.equal(pushed.at(-1)[1],'{"clear":true}');assert.equal((await (await upload(png())).json()).error,'pro_required');
+  assert.equal((await (await adminApi(request('splash/delete',{server:own},owner),env)).json()).ok,true);
+  assert.equal((await (await adminApi(request('splash?server='+own,undefined,owner),env)).json()).splash,null);
 });

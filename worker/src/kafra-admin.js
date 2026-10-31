@@ -1,3 +1,4 @@
+import {cleanPng,scanHash,maxUpload} from './kafra-splash.js';
 const encoder=new TextEncoder(),cookieName='__Host-kafra_admin',ttl=8*60*60*1000,day=86400000;
 const hex=bytes=>Array.from(new Uint8Array(bytes),n=>n.toString(16).padStart(2,'0')).join('');
 const unhex=text=>Uint8Array.from(text.match(/../g)??[],n=>parseInt(n,16));
@@ -178,6 +179,28 @@ async function downloads(env){
 const realmsOf=license=>{try{const r=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(license.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)))).realms;return Array.isArray(r)?r.map(String):[];}catch{return [];}};
 const licenseRows=async(env,id)=>(await env.DB.prepare('SELECT license_server,expires,max_online,license,issued_by,issued_at FROM kafra_licenses WHERE server_id=? ORDER BY id DESC LIMIT 20').bind(id).all()).results
   .map(r=>({server:r.license_server,realms:realmsOf(r.license),expiresAt:r.expires,maxOnline:r.max_online,license:r.license,issuedBy:r.issued_by,issuedAt:r.issued_at}));
+// Pro splash art per server: uploaded by the owner, reviewed by the Super Admin, signed, then pushed to the server's gate.
+const splashSql="CREATE TABLE IF NOT EXISTS kafra_splash (server_id TEXT PRIMARY KEY, png TEXT NOT NULL, sha256 TEXT NOT NULL, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', scan TEXT NOT NULL DEFAULT '', signature TEXT, uploaded_by TEXT NOT NULL, uploaded_at INTEGER NOT NULL, reviewed_at INTEGER, published_at INTEGER)";
+const splashView=r=>r&&{status:r.status,note:r.note,scan:r.scan,sha256:r.sha256,uploadedBy:r.uploaded_by,uploadedAt:r.uploaded_at,reviewedAt:r.reviewed_at,publishedAt:r.published_at,image:'data:image/png;base64,'+r.png};
+const b64=bytes=>{let text='';for(let i=0;i<bytes.length;i+=32768)text+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(text);};
+// Signed text the DLL checks (native/brand.cpp): "KGS1\n" + gate host + "\n" + hex sha256 of the PNG; same key as licenses.
+async function signSplash(env,host,sha256){
+  const pem=env.KAFRA_LICENSE_KEY;if(typeof pem!=='string'||!pem.includes('PRIVATE KEY'))throw new Error('license_key');
+  const der=Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g,'').replace(/\s+/g,'')),c=>c.charCodeAt(0));
+  const key=await crypto.subtle.importKey('pkcs8',der,{name:'ECDSA',namedCurve:'P-256'},false,['sign']);
+  return b64(new Uint8Array(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},key,encoder.encode('KGS1\n'+host+'\n'+sha256))));
+}
+// Best effort: true when the gate stored (or cleared) the art.
+async function pushSplash(env,id,body){
+  try{const target=await gateFor({role:'super_admin'},id,env),gate=target?.url&&target.key?gateUrl(target.url,env):null;if(!gate)return false;
+    const response=await fetch(new URL('/internal/owner/splash',gate),{method:'POST',headers:{Authorization:'Bearer '+target.key,'Content-Type':'application/json'},body:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(8000)});
+    return response.ok;}catch{return false;}
+}
+async function publishSplash(env,id){
+  const row=await env.DB.prepare("SELECT png,signature FROM kafra_splash WHERE server_id=? AND status='approved' AND signature IS NOT NULL").bind(id).first();if(!row)return false;
+  const ok=await pushSplash(env,id,{image:row.png,signature:row.signature});
+  if(ok)await env.DB.prepare('UPDATE kafra_splash SET published_at=? WHERE server_id=?').bind(Date.now(),id).run();return ok;
+}
 const planReady=new WeakSet();
 // Databases created before plans get the column once; servers that already ran Kafra Guard keep every feature (Pro).
 async function ensurePlan(env){
@@ -185,7 +208,7 @@ async function ensurePlan(env){
   try{await env.DB.prepare('SELECT kafra_plan FROM kafra_servers LIMIT 0').all();}
   catch{await env.DB.batch([env.DB.prepare("ALTER TABLE kafra_servers ADD COLUMN kafra_plan TEXT NOT NULL DEFAULT 'basic'"),
     env.DB.prepare("UPDATE kafra_servers SET kafra_plan='pro' WHERE kafra=1")]);}
-  await env.DB.batch([env.DB.prepare(licensesSql),env.DB.prepare(coreSql),env.DB.prepare(downloadsSql)]);planReady.add(env.DB);
+  await env.DB.batch([env.DB.prepare(licensesSql),env.DB.prepare(coreSql),env.DB.prepare(downloadsSql),env.DB.prepare(splashSql)]);planReady.add(env.DB);
 }
 // rAthena login-server license, same format as tools/license-gen.mjs: KG1.<b64url(json)>.<b64url(P-256 signature, IEEE-P1363)>.
 // realms (optional, always last in the JSON) lists the sub-servers (e.g. renewal, classic) one license covers;
@@ -367,6 +390,22 @@ async function adminRoutes(request,env,path){
       owners:owners.filter(o=>o.server_id===s.id).map(o=>({username:o.username,createdAt:o.created_at}))}))});
   }
   if(path==='/api/admin/core'&&request.method==='GET')return json({versions:await coreVersions(env)});
+  if(path==='/api/admin/splash'&&request.method==='GET'){
+    const rows=(await env.DB.prepare("SELECT s.*,k.name FROM kafra_splash s JOIN kafra_servers k ON k.id=s.server_id ORDER BY s.status='pending' DESC,s.uploaded_at DESC LIMIT 50").all()).results;
+    return json({splash:rows.map(r=>({server:r.server_id,name:r.name,...splashView(r)}))});
+  }
+  if(path==='/api/admin/splash/review'&&request.method==='POST'){
+    let data;try{data=await body(request);}catch{return json({error:'invalid_request'},400);}
+    const row=serverId.test(data.server??'')?await env.DB.prepare('SELECT s.sha256,k.gate_url,k.kafra_plan FROM kafra_splash s JOIN kafra_servers k ON k.id=s.server_id WHERE s.server_id=?').bind(data.server).first():null;
+    if(!row)return json({error:'splash_not_found'},404);
+    const note=data.note==null||data.note===''?'':text(String(data.note).trim(),200);if(note===null||/[\x00-\x1f\x7f]/.test(note))return json({error:'invalid_notes'},400);
+    if(data.approve!==true){await env.DB.prepare("UPDATE kafra_splash SET status='rejected',note=?,signature=NULL,reviewed_at=? WHERE server_id=?").bind(note,Date.now(),data.server).run();return json({ok:true,status:'rejected'});}
+    if(row.kafra_plan!=='pro')return json({error:'pro_required'},403);
+    let host;try{host=new URL(row.gate_url).hostname.toLowerCase();}catch{return json({error:'gate_not_configured'},503);}
+    let signature;try{signature=await signSplash(env,host,row.sha256);}catch{return json({error:'license_key_not_configured'},503);}
+    await env.DB.prepare("UPDATE kafra_splash SET status='approved',note=?,signature=?,reviewed_at=?,published_at=NULL WHERE server_id=?").bind(note,signature,Date.now(),data.server).run();
+    return json({ok:true,status:'approved',published:await publishSplash(env,data.server)});
+  }
   if(request.method!=='POST')return json({error:'not_found'},404);
   let data;try{data=await body(request);}catch{return json({error:'invalid_request'},400);}
   const find=async()=>serverId.test(data.id??'')?env.DB.prepare('SELECT * FROM kafra_servers WHERE id=?').bind(data.id).first():null;
@@ -391,6 +430,8 @@ async function adminRoutes(request,env,path){
       try{const target=await gateFor({role:'super_admin'},row.id,env),url=target?.url&&target.key?gateUrl(target.url,env):null;
         const response=url?await fetch(new URL('/internal/owner/policy',url),{method:'POST',headers:{Authorization:'Bearer '+target.key,'Content-Type':'application/json'},body:'{"protection":true}',redirect:'manual',signal:AbortSignal.timeout(4000)}):null;
         protectionRestored=!!response?.ok;}catch{protectionRestored=false;}
+      // Splash art is a Pro feature: take it off the gate (the owner's upload stays, for a later upgrade).
+      if(await pushSplash(env,row.id,{clear:true}))await env.DB.prepare('UPDATE kafra_splash SET published_at=NULL WHERE server_id=?').bind(row.id).run();
     }
     return json({ok:true,plan,protectionRestored});
   }
@@ -577,6 +618,34 @@ async function selfServe(request,env,path,user){
   await env.DB.prepare('INSERT INTO kafra_licenses (server_id,license_server,expires,max_online,license,issued_by,issued_at) VALUES (?,?,?,?,?,?,?)').bind(row.id,server,exp,max,license,user.username,now).run();
   return json({license,server,realms:[],expiresAt:exp,maxOnline:max},201);
 }
+// Owner side of Pro splash art: upload (checked, then waits for review), status, delete, re-publish.
+async function splashRoutes(request,env,path,user,url){
+  const write=request.method==='POST';let data={};
+  if(write){try{data=await body(request,Math.ceil(maxUpload*4/3)+1024);}catch{return json({error:'invalid_request'},400);}}
+  else if(path!=='/api/splash'||request.method!=='GET')return json({error:'not_found'},404);
+  const id=write?data.server:url.searchParams.get('server')??user.serverId;
+  const row=await serverRow(user,id,env);if(!row?.kafra)return json({error:'server_not_found'},404);
+  const current=()=>env.DB.prepare('SELECT * FROM kafra_splash WHERE server_id=?').bind(row.id).first();
+  if(!write)return json({plan:row.kafra_plan==='pro'?'pro':'basic',splash:splashView(await current())});
+  if(path==='/api/splash/delete'){
+    await env.DB.prepare('DELETE FROM kafra_splash WHERE server_id=?').bind(row.id).run();
+    return json({ok:true,cleared:await pushSplash(env,row.id,{clear:true})});
+  }
+  if(row.kafra_plan!=='pro')return json({error:'pro_required'},403);
+  if(path==='/api/splash/publish')return (await current())?.status==='approved'?json({published:await publishSplash(env,row.id)}):json({error:'splash_not_approved'},409);
+  if(path!=='/api/splash')return json({error:'not_found'},404);
+  const today=Math.floor(Date.now()/day);
+  if(await bump(env,await sha('splash|'+row.id+'|'+today),(today+1)*day)>20)return json({error:'too_many_attempts'},429);
+  let original;try{if(typeof data.image!=='string'||data.image.length>Math.ceil(maxUpload*4/3)+4)throw new Error();original=Uint8Array.from(atob(data.image),c=>c.charCodeAt(0));}
+  catch{return json({error:'invalid_image'},400);}
+  let png;try{png=await cleanPng(original);}catch(error){return json({error:['image_size','image_too_large'].includes(error.message)?error.message:'invalid_image'},400);}
+  const scan=await scanHash(env,hex(await crypto.subtle.digest('SHA-256',original)));if(scan==='flagged')return json({error:'image_flagged'},400);
+  const sha256=hex(await crypto.subtle.digest('SHA-256',png));
+  // A new upload waits for review; the gate keeps showing the previously approved art until then.
+  await env.DB.prepare("INSERT INTO kafra_splash (server_id,png,sha256,status,note,scan,signature,uploaded_by,uploaded_at,reviewed_at,published_at) VALUES (?,?,?,'pending','',?,NULL,?,?,NULL,NULL) ON CONFLICT(server_id) DO UPDATE SET png=excluded.png,sha256=excluded.sha256,status='pending',note='',scan=excluded.scan,signature=NULL,uploaded_by=excluded.uploaded_by,uploaded_at=excluded.uploaded_at,reviewed_at=NULL,published_at=NULL")
+    .bind(row.id,b64(png),sha256,scan,user.username,Date.now()).run();
+  return json({splash:splashView(await current())},201);
+}
 export async function adminApi(request,env){
   const url=new URL(request.url),path=url.pathname;
   // App-to-Worker telemetry carries no browser Origin; it authenticates with the server's ingest key instead.
@@ -629,6 +698,7 @@ export async function adminApi(request,env){
     return json({ok:true},200,{'Set-Cookie':cookieName+'=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict'});
   }
   if(path==='/api/downloads'&&request.method==='GET')return json({downloads:await downloads(env)});
+  if(path==='/api/splash'||path.startsWith('/api/splash/'))return splashRoutes(request,env,path,user,url);
   if(path==='/api/self'||path.startsWith('/api/self/'))return selfServe(request,env,path,user);
   if(path.startsWith('/api/admin/'))return user.role==='super_admin'?adminRoutes(request,env,path):json({error:'forbidden'},403);
   if(path==='/api/moro'&&request.method==='GET')return moroDashboard(user,url.searchParams.get('server')??user.serverId,env);

@@ -73,3 +73,8 @@ tr.waiting td{background:hsla(39,72%,56%,.06)}tr.waiting td:first-child{box-shad
 #downloads-form{margin-top:22px}
 @media (max-width:640px){.step .form-body,.step .table-wrap,.tutorial{margin-left:0}}
 .inline-form button{width:auto;margin:0}
+/* Pro splash art: owner panel and Super Admin review cards. */
+.splash-body{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;padding:0 22px 20px}.splash-body .form-body{flex:1 1 280px;padding:0}
+#splash-preview,.splash-card img{width:320px;max-width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;box-shadow:inset 0 0 0 1px var(--line);background:var(--bg-deep)}
+.splash-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.splash-actions button{width:auto;margin:0}
+.splash-review{display:grid;gap:14px;padding:0 22px 20px}.splash-card{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}.splash-card div{display:grid;gap:8px;flex:1 1 240px}.splash-card small{color:var(--muted)}
