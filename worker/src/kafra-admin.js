@@ -158,13 +158,15 @@ function gateUrl(value,env){
   return gate;
 }
 function httpsUrl(value){let url;try{url=new URL(value);}catch{return null;}return url.protocol==='https:'&&!url.username&&!url.password&&value.length<=500?url.href:null;}
-// Kafra Guard plans: 'basic' (Kafra Guard) and 'pro' (Kafra Guard Pro). Pro adds the protection switch, client limits and
-// player module reports; the Worker refuses those calls for Basic servers, the dashboard shows an upgrade card instead.
-// Everything a plan allows lives here: sub-servers per license (realms), allowed-DLL rules, players online per license.
-const planLimits={basic:{realms:1,allowRules:10,maxOnline:50},pro:{realms:16,allowRules:5000,maxOnline:100000}};
+// Kafra Guard plans: 'basic' (Kafra Guard) and 'pro' (Kafra Guard Pro). Pro adds the protection switch, higher client
+// limits and player module reports; the Worker refuses those calls for Basic servers, the dashboard shows an upgrade card instead.
+// Everything a plan allows lives here: sub-servers per license (realms), allowed-DLL rules, players online per license,
+// clients per PC (maxPerDevice) and per network (maxPerNetwork; 0 = no limit, Pro only).
+const planLimits={basic:{realms:1,allowRules:10,maxOnline:50,maxPerDevice:2,maxPerNetwork:2},pro:{realms:16,allowRules:5000,maxOnline:100000,maxPerDevice:10,maxPerNetwork:100}};
 const limitsOf=plan=>planLimits[plan==='pro'?'pro':'basic'];
+const withinClientLimits=(plan,device,network)=>{const l=limitsOf(plan);return device<=l.maxPerDevice&&(network===0?plan==='pro':network<=l.maxPerNetwork);};
 const product=row=>{const kafraPlan=row.kafra_plan==='pro'?'pro':'basic';return {id:row.id,name:row.name,kafra:!!row.kafra,moro:!!row.moro,kafraPlan,limits:limitsOf(kafraPlan)};};
-const proActions=new Set(['policy','modules']);
+const proActions=new Set(['modules']);
 const licensesSql='CREATE TABLE IF NOT EXISTS kafra_licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL, license_server TEXT NOT NULL, expires TEXT NOT NULL, max_online INTEGER NOT NULL DEFAULT 0, license TEXT NOT NULL, issued_by TEXT NOT NULL, issued_at INTEGER NOT NULL)';
 // Known GameShield.dll builds (Kafra Guard core), registered by the Super Admin by SHA-256 only; the DLL itself is never uploaded.
 const coreSql="CREATE TABLE IF NOT EXISTS kafra_core_versions (sha256 TEXT PRIMARY KEY, label TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', latest INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)";
@@ -424,11 +426,17 @@ async function adminRoutes(request,env,path){
     const plan=data.plan===undefined?(row.kafra_plan==='pro'?'pro':'basic'):data.plan;if(!['basic','pro'].includes(plan))return json({error:'invalid_kafra_plan'},400);
     let sealed=row.gate_key;if(key){try{sealed=await seal(env,key,row.id);}catch{return json({error:'data_key_not_configured'},503);}}
     await env.DB.prepare('UPDATE kafra_servers SET kafra=1,gate_url=?,gate_key=?,kafra_plan=? WHERE id=?').bind(gate.origin+'/',sealed,plan,row.id).run();
-    // Basic has no protection switch, so a server moved down from Pro gets protection back on (best effort; reported back).
+    // Basic has no protection switch and allows at most 2 clients per PC and per network, so a server moved down from Pro
+    // gets protection back on and its client limits brought within Basic (best effort; reported back).
     let protectionRestored=null;
     if(row.kafra_plan==='pro'&&plan==='basic'){
       try{const target=await gateFor({role:'super_admin'},row.id,env),url=target?.url&&target.key?gateUrl(target.url,env):null;
-        const response=url?await fetch(new URL('/internal/owner/policy',url),{method:'POST',headers:{Authorization:'Bearer '+target.key,'Content-Type':'application/json'},body:'{"protection":true}',redirect:'manual',signal:AbortSignal.timeout(4000)}):null;
+        const headers={Authorization:'Bearer '+target?.key},policy={protection:true};
+        if(url){try{const current=await fetch(new URL('/internal/owner/policy',url),{headers,redirect:'manual',signal:AbortSignal.timeout(4000)});
+          const {maxPerDevice,maxPerNetwork}=current.ok?JSON.parse((await current.text()).slice(0,131072)):{};
+          if(Number.isSafeInteger(maxPerDevice)&&Number.isSafeInteger(maxPerNetwork)&&!withinClientLimits('basic',maxPerDevice,maxPerNetwork)){const b=limitsOf('basic');
+            Object.assign(policy,{maxPerDevice:Math.min(maxPerDevice,b.maxPerDevice),maxPerNetwork:maxPerNetwork===0?b.maxPerNetwork:Math.min(maxPerNetwork,b.maxPerNetwork)});}}catch{}}
+        const response=url?await fetch(new URL('/internal/owner/policy',url),{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(policy),redirect:'manual',signal:AbortSignal.timeout(4000)}):null;
         protectionRestored=!!response?.ok;}catch{protectionRestored=false;}
       // Splash art is a Pro feature: take it off the gate (the owner's upload stays, for a later upgrade).
       if(await pushSplash(env,row.id,{clear:true}))await env.DB.prepare('UPDATE kafra_splash SET published_at=NULL WHERE server_id=?').bind(row.id).run();
@@ -737,6 +745,10 @@ export async function adminApi(request,env){
     if(!target)return json({error:'server_not_found'},404);
     if(proActions.has(action)&&target.plan!=='pro')return json({error:'pro_required'},403);
     const limits=limitsOf(target.plan);
+    // Basic may read and set client limits up to 2 per PC and per network; the protection switch and anything higher is Pro.
+    if(action==='policy'&&write&&target.plan!=='pro'){
+      if(payload.protection!==undefined)return json({error:'pro_required'},403);
+      if(!withinClientLimits(target.plan,payload.maxPerDevice,payload.maxPerNetwork))return json({error:'pro_required_limits',maxPerDevice:limits.maxPerDevice,maxPerNetwork:limits.maxPerNetwork},403);}
     // Tying builds to sub-servers is the multi-server feature (Pro).
     if(action==='build'&&payload.realm&&limits.realms<2)return json({error:'pro_required_realms'},403);
     const gate=target.url&&target.key?gateUrl(target.url,env):null;if(!gate)return json({error:'gate_not_configured'},503);

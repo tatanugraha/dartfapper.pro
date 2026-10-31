@@ -66,7 +66,7 @@ test('Products are opt-in: an owner sees nothing until Kafra Guard or Mobile RO 
   const {id}=await (await adminApi(request('admin/servers',{name:'Bare RO'},admin),env)).json();
   await adminApi(request('admin/owners',{username:'bare.owner',password:'owner-pass-1234',serverId:id},admin),env);
   const owner=(await adminApi(request('login',{username:'bare.owner',password:'owner-pass-1234'}),env)).headers.get('Set-Cookie').split(';')[0];
-  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers,[{id,name:'Bare RO',kafra:false,moro:false,kafraPlan:'basic',limits:{realms:1,allowRules:10,maxOnline:50}}]);
+  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers,[{id,name:'Bare RO',kafra:false,moro:false,kafraPlan:'basic',limits:{realms:1,allowRules:10,maxOnline:50,maxPerDevice:2,maxPerNetwork:2}}]);
   assert.equal((await adminApi(request('sessions',undefined,owner),env)).status,404);assert.equal((await adminApi(request('moro',undefined,owner),env)).status,404);
   assert.equal((await adminApi(request('admin/servers/kafra',{id,enabled:true,gateUrl:'https://gate.bare.test/',gateKey:''},admin),env)).status,400);
 });
@@ -276,16 +276,25 @@ test('OTA per server: agent reports channels, Super Admin requests promote, agen
   view=(await (await adminApi(request('moro?server='+own,undefined,admin),env)).json()).ota;assert.equal(view.rollback.tag,'v1.0.18');
   assert.equal((await rollback()).status,200);assert.equal((await agent({production:state.canary})).action.action,'rollback');
 });
-test('Kafra Guard Basic: protection switch, client limits and player modules need Pro; build approvals work on every plan',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
+test('Kafra Guard Basic: protection switch, client limits above 2 and player modules need Pro; build approvals work on every plan',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
   const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const calls=[];
   globalThis.fetch=async(url,init)=>{calls.push({url:String(url),body:init.body});
     if(String(url).endsWith('/internal/owner/builds'))return new Response(JSON.stringify({published:['a'.repeat(64)],approved:[],pending:[{build:'b'.repeat(64),firstSeen:'2026-10-31T00:00:00Z',lastSeen:'2026-10-31T00:00:00Z',attempts:3},{build:'not-a-hash'}]}));
     return new Response(JSON.stringify({maxPerDevice:2,maxPerNetwork:0,networkPrefix:24,protection:true,approved:'x'}));};
   const down=await (await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',gateKey:'',plan:'basic'},admin),env)).json();
-  assert.equal(down.plan,'basic');assert.equal(down.protectionRestored,true);assert.deepEqual(calls.slice(-2).map(c=>[c.url.split('/').pop(),c.body]),[['policy','{"protection":true}'],['splash','{"clear":true}']]);
+  // Moving down to Basic turns protection back on and brings "no network limit" down to Basic's 2 per network.
+  assert.equal(down.plan,'basic');assert.equal(down.protectionRestored,true);
+  assert.deepEqual(calls.slice(-3).map(c=>[c.url.split('/').pop(),c.body]),[['policy',undefined],['policy','{"protection":true,"maxPerDevice":2,"maxPerNetwork":2}'],['splash','{"clear":true}']]);
   assert.equal((await (await adminApi(request('me',undefined,owner),env)).json()).servers[0].kafraPlan,'basic');
-  for(const [path,body] of [['policy?server='+own],['policy',{server:own,protection:false}],['policy',{server:own,maxPerDevice:1,maxPerNetwork:0}],['modules?server='+own+'&id='+'a'.repeat(32)]]){
+  for(const [path,body] of [['policy',{server:own,protection:false}],['modules?server='+own+'&id='+'a'.repeat(32)]]){
     const response=await adminApi(request(path,body,owner),env);assert.equal(response.status,403,path);assert.equal((await response.json()).error,'pro_required');}
+  // Basic reads and sets client limits up to 2 per PC and 2 per network; more, or no network limit, is Pro.
+  assert.equal((await adminApi(request('policy?server='+own,undefined,owner),env)).status,200);
+  for(const [maxPerDevice,maxPerNetwork] of [[3,1],[1,3],[2,0],[10,100]]){
+    const response=await adminApi(request('policy',{server:own,maxPerDevice,maxPerNetwork},owner),env);assert.equal(response.status,403);
+    assert.deepEqual(await response.json(),{error:'pro_required_limits',maxPerDevice:2,maxPerNetwork:2});}
+  assert.equal((await adminApi(request('policy',{server:own,maxPerDevice:2,maxPerNetwork:2},owner),env)).status,200);
+  assert.equal(calls.at(-1).body,'{"maxPerDevice":2,"maxPerNetwork":2}');
   const before=calls.length;
   const builds=await (await adminApi(request('builds?server='+own,undefined,owner),env)).json();
   assert.deepEqual(builds.pending.map(b=>b.build),['b'.repeat(64)]);assert.equal(builds.pending[0].attempts,3);
@@ -350,7 +359,7 @@ test('Kafra Guard Basic limits: one login server, 50 players online, 10 allowed 
   const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});let rules=[];const sent=[];
   globalThis.fetch=async(url,init)=>{if(String(url).endsWith('/rules'))return new Response(JSON.stringify({rules}));sent.push(String(url));return new Response('{}');};
   assert.equal((await plan('basic')).status,200);
-  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers[0].limits,{realms:1,allowRules:10,maxOnline:50});
+  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers[0].limits,{realms:1,allowRules:10,maxOnline:50,maxPerDevice:2,maxPerNetwork:2});
   assert.equal((await (await license({realms:['renewal','classic'],maxOnline:50})).json()).error,'pro_required_realms');
   for(const maxOnline of [0,51])assert.equal((await (await license({maxOnline})).json()).error,'basic_max_online',String(maxOnline));
   assert.equal((await license({maxOnline:50,realms:['renewal']})).status,201);
