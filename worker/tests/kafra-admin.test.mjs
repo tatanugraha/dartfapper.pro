@@ -154,6 +154,9 @@ test('client limits are read and set on the owner gate; other servers and bad va
   assert.equal((await adminApi(request('policy',{server:other,protection:false},owner),env)).status,404);
   assert.equal((await adminApi(request('policy?server='+other,undefined,owner),env)).status,404);
   assert.equal(seen.length,3);
+  globalThis.fetch=async()=>new Response('',{status:400});
+  assert.deepEqual(await (await adminApi(request('policy',{server:own,protection:false},owner),env)).json(),{error:'protection_unsupported'});
+  assert.deepEqual(await (await adminApi(request('policy',{server:own,maxPerDevice:1,maxPerNetwork:0},owner),env)).json(),{error:'invalid_limits'});
 });
 test('kick, ban and unban go to the owner gate only, with validated input',async t=>{const env=await fixture(t),{own,other,owner}=await ownerSetup(env);
   const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];

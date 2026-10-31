@@ -501,7 +501,8 @@ export async function adminApi(request,env){
       const response=await fetch(new URL('/internal/owner/'+action,gate),init);
       if(response.status===404&&['kick','unban','unrule'].includes(action))return json({error:{kick:'session_closed',unban:'not_banned',unrule:'rule_not_found'}[action]},404);
       if(response.status===409&&action==='rule')return json({error:'rule_limit'},409);
-      if(response.status===400)return json({error:action==='policy'?'invalid_limits':'invalid_request'},400);
+      // A gate older than the protection switch rejects the unknown field.
+      if(response.status===400)return json({error:action==='policy'?(payload?.protection!==undefined?'protection_unsupported':'invalid_limits'):'invalid_request'},400);
       if(!response.ok)return unavailable('HTTP '+response.status);
       const result=JSON.parse((await response.text()).slice(0,action==='rules'?4194304:131072));
       if(action==='policy')return json({maxPerDevice:result.maxPerDevice,maxPerNetwork:result.maxPerNetwork,networkPrefix:result.networkPrefix,protection:result.protection!==false});
