@@ -183,6 +183,34 @@ isi sub-server-nya juga, supaya client itu hanya bisa login ke sub-server terseb
 players online berlaku per sub-server. Gate butuh `server/gate-upgrade-realms.sql`; detail
 dan daftar celah yang ditutup ada di `docs/MULTI-REALM.md` (repo kafra-shield).
 
+## Kafra Guard gratis (self-serve) dan halaman Get started
+
+Siapa pun yang daftar lewat Google/Discord (member) bisa memasang Kafra Guard (Basic) sendiri
+dari menu **Get started**, tanpa Super Admin:
+
+1. **Create my free server**: membuat 1 server `kafra=1`, plan `basic`. Member berubah jadi
+   Server Owner dengan username yang sama (login Google/Discord tetap terhubung). Akun ini
+   **tanpa password** (`dummyHash`), jadi login terakhirnya tidak bisa di-unlink. Batas: 3 server
+   per IP per hari, 200 per hari global.
+2. **Download owner tools**: daftar dari tabel `kafra_downloads` (link HTTPS + SHA-256), diisi
+   Super Admin di halaman yang sama (*Owner tools*); file di-hash di browser, tidak di-upload.
+3. Tutorial install gate (KafraGuardConfig *Install to VPS* atau `sudo bash installer/install.sh`).
+   Installer baru menulis `ownerKey` dan `internalPort` (8444) ke `gate.json`.
+4. **Connect gate** (`POST /api/self/gate`): URL + `ownerKey`. Worker mengetes
+   `GET /internal/owner/policy` dengan key itu dulu (`gate_key_rejected` bila ditolak), baru
+   menyimpannya terenkripsi. Gate bawaan (`KAFRA_GATE_URL`) tidak bisa diubah owner. 30×/hari.
+5. Tutorial module rAthena (`kafraguard-install.sh`, `kafraguard.conf`).
+6. **Generate license** (`POST /api/self/license`): selalu Basic, 30 hari, max 50 online, tanpa
+   sub-server; `issued_by` = username owner. 10×/hari. Server Pro dapat `license_by_admin`.
+7. Tutorial patch client + approve build.
+
+`GET /api/self` memberi status checklist (server, gate tersambung, riwayat lisensi);
+`GET /api/downloads` terbuka untuk semua user yang login.
+
+**Beban gate di atas 50 pemain**: gate menyimpan sesi di memori dan menerima heartbeat tiap 30
+detik per client, jadi 50 vs 500 pemain hampir tidak terasa di VPS. Batas 50 untuk Basic adalah
+batas paket, bukan batas teknis.
+
 ## Data yang ditampilkan
 
 Sesi aktif, IP yang dilihat gate, unique ID perangkat bernamespace, build hash,

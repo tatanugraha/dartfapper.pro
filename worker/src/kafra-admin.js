@@ -167,6 +167,17 @@ const proActions=new Set(['policy','modules']);
 const licensesSql='CREATE TABLE IF NOT EXISTS kafra_licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL, license_server TEXT NOT NULL, expires TEXT NOT NULL, max_online INTEGER NOT NULL DEFAULT 0, license TEXT NOT NULL, issued_by TEXT NOT NULL, issued_at INTEGER NOT NULL)';
 // Known GameShield.dll builds (Kafra Guard core), registered by the Super Admin by SHA-256 only; the DLL itself is never uploaded.
 const coreSql="CREATE TABLE IF NOT EXISTS kafra_core_versions (sha256 TEXT PRIMARY KEY, label TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', latest INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)";
+// Owner tools (KafraGuardConfig, patcher, server kit, gate) listed by the Super Admin for the install page: HTTPS link + SHA-256.
+const downloadsSql="CREATE TABLE IF NOT EXISTS kafra_downloads (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, version TEXT NOT NULL, url TEXT NOT NULL, sha256 TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL)";
+const downloadKinds=['config','patcher','server-kit','gate','other'];
+async function downloads(env){
+  return (await env.DB.prepare('SELECT id,kind,version,url,sha256,notes,created_at FROM kafra_downloads ORDER BY created_at DESC LIMIT 50').all()).results
+    .map(d=>({id:d.id,kind:d.kind,version:d.version,url:d.url,sha256:d.sha256,notes:d.notes,addedAt:d.created_at}));
+}
+// Realms are read back from the signed payload, so older rows need no extra column.
+const realmsOf=license=>{try{const r=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(license.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)))).realms;return Array.isArray(r)?r.map(String):[];}catch{return [];}};
+const licenseRows=async(env,id)=>(await env.DB.prepare('SELECT license_server,expires,max_online,license,issued_by,issued_at FROM kafra_licenses WHERE server_id=? ORDER BY id DESC LIMIT 20').bind(id).all()).results
+  .map(r=>({server:r.license_server,realms:realmsOf(r.license),expiresAt:r.expires,maxOnline:r.max_online,license:r.license,issuedBy:r.issued_by,issuedAt:r.issued_at}));
 const planReady=new WeakSet();
 // Databases created before plans get the column once; servers that already ran Kafra Guard keep every feature (Pro).
 async function ensurePlan(env){
@@ -174,7 +185,7 @@ async function ensurePlan(env){
   try{await env.DB.prepare('SELECT kafra_plan FROM kafra_servers LIMIT 0').all();}
   catch{await env.DB.batch([env.DB.prepare("ALTER TABLE kafra_servers ADD COLUMN kafra_plan TEXT NOT NULL DEFAULT 'basic'"),
     env.DB.prepare("UPDATE kafra_servers SET kafra_plan='pro' WHERE kafra=1")]);}
-  await env.DB.batch([env.DB.prepare(licensesSql),env.DB.prepare(coreSql)]);planReady.add(env.DB);
+  await env.DB.batch([env.DB.prepare(licensesSql),env.DB.prepare(coreSql),env.DB.prepare(downloadsSql)]);planReady.add(env.DB);
 }
 // rAthena login-server license, same format as tools/license-gen.mjs: KG1.<b64url(json)>.<b64url(P-256 signature, IEEE-P1363)>.
 // realms (optional, always last in the JSON) lists the sub-servers (e.g. renewal, classic) one license covers;
@@ -395,6 +406,20 @@ async function adminRoutes(request,env,path){
       env.DB.prepare('INSERT INTO kafra_core_versions (sha256,label,notes,latest,created_at) VALUES (?,?,?,?,?) ON CONFLICT(sha256) DO UPDATE SET label=excluded.label,notes=excluded.notes,latest=MAX(latest,excluded.latest)').bind(data.sha256,label,notes,latest?1:0,Date.now())]);
     return json({versions:await coreVersions(env)});
   }
+  if(path==='/api/admin/downloads'){
+    if(!downloadKinds.includes(data.kind))return json({error:'invalid_download_kind'},400);
+    const version=typeof data.version==='string'?text(data.version.trim(),32):null,link=typeof data.url==='string'?httpsUrl(data.url.trim()):null;
+    const notes=data.notes==null||data.notes===''?'':text(String(data.notes).trim(),300);
+    if(!version||/[\x00-\x1f\x7f]/.test(version))return json({error:'invalid_version'},400);if(!link)return json({error:'invalid_download_url'},400);
+    if(!/^[a-f0-9]{64}$/.test(data.sha256??''))return json({error:'invalid_hash'},400);if(notes===null)return json({error:'invalid_notes'},400);
+    if((await env.DB.prepare('SELECT COUNT(*) AS n FROM kafra_downloads').first()).n>=50)return json({error:'download_limit'},409);
+    await env.DB.prepare('INSERT INTO kafra_downloads (kind,version,url,sha256,notes,created_at) VALUES (?,?,?,?,?,?)').bind(data.kind,version,link,data.sha256,notes,Date.now()).run();
+    return json({downloads:await downloads(env)},201);
+  }
+  if(path==='/api/admin/downloads/delete'){
+    if(!Number.isSafeInteger(data.id))return json({error:'invalid_id'},400);
+    await env.DB.prepare('DELETE FROM kafra_downloads WHERE id=?').bind(data.id).run();return json({downloads:await downloads(env)});
+  }
   if(path==='/api/admin/core/delete'){
     if(!/^[a-f0-9]{64}$/.test(data.sha256??''))return json({error:'invalid_hash'},400);
     await env.DB.prepare('DELETE FROM kafra_core_versions WHERE sha256=?').bind(data.sha256).run();return json({versions:await coreVersions(env)});
@@ -416,10 +441,7 @@ async function adminRoutes(request,env,path){
   }
   if(path==='/api/admin/licenses'){
     if(!serverId.test(data.id??''))return json({error:'invalid_server'},400);
-    const rows=(await env.DB.prepare('SELECT license_server,expires,max_online,license,issued_by,issued_at FROM kafra_licenses WHERE server_id=? ORDER BY id DESC LIMIT 20').bind(data.id).all()).results;
-    // Realms are read back from the signed payload, so older rows need no extra column.
-    const realmsOf=license=>{try{const r=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(license.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)))).realms;return Array.isArray(r)?r.map(String):[];}catch{return [];}};
-    return json({licenses:rows.map(r=>({server:r.license_server,realms:realmsOf(r.license),expiresAt:r.expires,maxOnline:r.max_online,license:r.license,issuedBy:r.issued_by,issuedAt:r.issued_at}))});
+    return json({licenses:await licenseRows(env,data.id)});
   }
   if(path==='/api/admin/servers/moro'){
     const row=await find();if(!row)return json({error:'invalid_server'},400);
@@ -497,6 +519,64 @@ async function adminRoutes(request,env,path){
   }
   return json({error:'not_found'},404);
 }
+// Owners created from a member sign-up have no password (dummyHash never matches); they sign in with Google/Discord only.
+const ssoOnly=async(env,user)=>user.role==='server_owner'&&(await env.DB.prepare('SELECT password_hash FROM kafra_owners WHERE username=?').bind(user.username).first())?.password_hash===dummyHash;
+const selfLicenseDays=30;
+// Self-serve Kafra Guard (Basic): any signed-in member opens one free server, connects their own gate and issues
+// 30-day licenses within the Basic limits. Pro licenses and plan changes stay with the Super Admin.
+async function selfServe(request,env,path,user){
+  const now=Date.now(),today=Math.floor(now/day),until=(today+1)*day;
+  if(path==='/api/self'&&request.method==='GET'){
+    if(user.role!=='server_owner')return json({role:user.role,server:null});
+    const row=await env.DB.prepare('SELECT * FROM kafra_servers WHERE id=?').bind(user.serverId).first();if(!row)return json({error:'server_not_found'},404);
+    const builtIn=!!row.gate_url&&row.gate_url===envGate(env);
+    return json({role:user.role,ssoOnly:await ssoOnly(env,user),server:{...product(row),gateUrl:row.gate_url,gateConnected:!!row.gate_url&&(!!row.gate_key||builtIn),builtIn},
+      licenses:row.kafra?await licenseRows(env,row.id):[]});
+  }
+  if(request.method!=='POST')return json({error:'not_found'},404);
+  let data;try{data=await body(request);}catch{return json({error:'invalid_request'},400);}
+  if(path==='/api/self/server'){
+    if(user.role!=='member')return json({error:'already_has_server'},409);
+    const name=typeof data.name==='string'?text(data.name.trim(),60):null;if(!name||/[\n\r\t]/.test(name))return json({error:'invalid_name'},400);
+    const ip=request.headers.get('CF-Connecting-IP')??'local';
+    for(const [scope,limit] of [['global',200],[ip,3]])
+      if(await bump(env,await sha('self-server|'+scope+'|'+today),until)>limit)return json({error:'too_many_attempts'},429);
+    // The member becomes the server's (SSO-only) owner under the same username, so their Google/Discord logins stay linked.
+    const id=hex(crypto.getRandomValues(new Uint8Array(8))),owner={username:user.username,password_hash:dummyHash,server_id:id};
+    const [,,,removed]=await env.DB.batch([
+      env.DB.prepare("INSERT INTO kafra_servers (id,name,kafra,kafra_plan,created_at) VALUES (?,?,1,'basic',?)").bind(id,name,now),
+      env.DB.prepare('INSERT INTO kafra_owners (username,password_hash,server_id,created_at) VALUES (?,?,?,?)').bind(owner.username,dummyHash,id,now),
+      env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE username=?').bind(user.username),
+      env.DB.prepare('DELETE FROM kafra_members WHERE username=?').bind(user.username)
+    ]);
+    if(!removed.meta.changes)return json({error:'unauthorized'},401);
+    return json({id,name,plan:'basic'},201,{'Set-Cookie':await createSession(env,user.username,await ownerVersion(env,owner))});
+  }
+  if(user.role!=='server_owner')return json({error:'forbidden'},403);
+  const row=await env.DB.prepare('SELECT * FROM kafra_servers WHERE id=?').bind(user.serverId).first();if(!row?.kafra)return json({error:'server_not_found'},404);
+  const daily={'/api/self/gate':30,'/api/self/license':10}[path];if(!daily)return json({error:'not_found'},404);
+  if(await bump(env,await sha('self|'+path+'|'+row.id+'|'+today),until)>daily)return json({error:'too_many_attempts'},429);
+  if(path==='/api/self/gate'){
+    // The built-in gate (KAFRA_GATE_URL) belongs to the Super Admin.
+    if(row.gate_url&&row.gate_url===envGate(env))return json({error:'forbidden'},403);
+    const gate=typeof data.gateUrl==='string'?gateUrl(data.gateUrl.trim(),env):null;if(!gate||gate.origin+'/'===envGate(env))return json({error:'invalid_gate_url'},400);
+    const key=typeof data.gateKey==='string'?data.gateKey.trim().toLowerCase():'';if(!/^[a-f0-9]{64}$/.test(key))return json({error:'invalid_gate_key'},400);
+    // Saved only once the gate answers the owner API with this key, so the dashboard works right after.
+    try{const response=await fetch(new URL('/internal/owner/policy',gate),{headers:{Authorization:'Bearer '+key},redirect:'manual',signal:AbortSignal.timeout(4000)});
+      if(response.status===401||response.status===403)return json({error:'gate_key_rejected'},400);if(!response.ok)return unavailable('HTTP '+response.status);}
+    catch(error){return unavailable(error);}
+    let sealed;try{sealed=await seal(env,key,row.id);}catch{return json({error:'data_key_not_configured'},503);}
+    await env.DB.prepare('UPDATE kafra_servers SET gate_url=?,gate_key=? WHERE id=?').bind(gate.origin+'/',sealed,row.id).run();
+    return json({ok:true,gateUrl:gate.origin+'/'});
+  }
+  // Pro licenses (sub-servers, higher limits) come with the plan from the Super Admin.
+  if(row.kafra_plan==='pro')return json({error:'license_by_admin'},403);
+  const server=typeof data.server==='string'?data.server.trim().toLowerCase():'';if(!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(server))return json({error:'invalid_license_server'},400);
+  const exp=new Date(now+selfLicenseDays*day).toISOString().slice(0,10),max=limitsOf('basic').maxOnline;
+  let license;try{license=await signLicense(env,{server,exp,max});}catch{return json({error:'license_key_not_configured'},503);}
+  await env.DB.prepare('INSERT INTO kafra_licenses (server_id,license_server,expires,max_online,license,issued_by,issued_at) VALUES (?,?,?,?,?,?,?)').bind(row.id,server,exp,max,license,user.username,now).run();
+  return json({license,server,realms:[],expiresAt:exp,maxOnline:max},201);
+}
 export async function adminApi(request,env){
   const url=new URL(request.url),path=url.pathname;
   // App-to-Worker telemetry carries no browser Origin; it authenticates with the server's ingest key instead.
@@ -533,20 +613,23 @@ export async function adminApi(request,env){
   await ensurePlan(env);
   if(path==='/api/me'&&request.method==='GET'){
     const identities=(await env.DB.prepare('SELECT provider,label,linked_at FROM kafra_identities WHERE username=?').bind(user.username).all()).results;
-    return json({username:user.username,name:user.name??user.username,role:user.role,servers:await visibleServers(user,env),providers:configured(env),
+    // Owners who signed up with Google/Discord show that name rather than their generated username.
+    return json({username:user.username,name:user.name??(user.username.startsWith('member-')?identities[0]?.label:null)??user.username,role:user.role,servers:await visibleServers(user,env),providers:configured(env),
       identities:identities.map(i=>({provider:i.provider,label:i.label,linkedAt:i.linked_at}))});
   }
   if(path==='/api/identities/unlink'&&request.method==='POST'){
     let data;try{data=await body(request);}catch{return json({error:'invalid_request'},400);}
     if(!Object.hasOwn(providers,data.provider??''))return json({error:'invalid_provider'},400);
     // A member has no password, so the last linked login cannot be removed.
-    if(user.role==='member'&&(await env.DB.prepare('SELECT COUNT(*) AS n FROM kafra_identities WHERE username=? AND provider<>?').bind(user.username,data.provider).first()).n===0)return json({error:'last_sign_in'},400);
+    if((user.role==='member'||await ssoOnly(env,user))&&(await env.DB.prepare('SELECT COUNT(*) AS n FROM kafra_identities WHERE username=? AND provider<>?').bind(user.username,data.provider).first()).n===0)return json({error:'last_sign_in'},400);
     await env.DB.prepare('DELETE FROM kafra_identities WHERE provider=? AND username=?').bind(data.provider,user.username).run();return json({ok:true});
   }
   if(path==='/api/logout'&&request.method==='POST'){
     await env.DB.prepare('DELETE FROM kafra_admin_sessions WHERE token_hash=?').bind(await sha(cookie(request))).run();
     return json({ok:true},200,{'Set-Cookie':cookieName+'=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict'});
   }
+  if(path==='/api/downloads'&&request.method==='GET')return json({downloads:await downloads(env)});
+  if(path==='/api/self'||path.startsWith('/api/self/'))return selfServe(request,env,path,user);
   if(path.startsWith('/api/admin/'))return user.role==='super_admin'?adminRoutes(request,env,path):json({error:'forbidden'},403);
   if(path==='/api/moro'&&request.method==='GET')return moroDashboard(user,url.searchParams.get('server')??user.serverId,env);
   // Client limits, kick and ban live on the gate; owners manage their own server, the Super Admin every server.

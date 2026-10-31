@@ -62,3 +62,14 @@ tr.flagged td{background:rgba(255,90,90,.08)}tr.flagged td:first-child{box-shado
 tr.waiting td{background:hsla(39,72%,56%,.06)}tr.waiting td:first-child{box-shadow:inset 3px 0 var(--gold)}#builds-panel{margin-top:18px}#builds-status{margin:0 22px 12px}#builds-status:empty{display:none}#builds-waiting{margin-left:6px}#builds-refresh{white-space:nowrap}
 .license-form{border-top:1px solid var(--line);padding-top:20px}.license-form .key-output{margin-top:16px}.license-form .table-wrap{margin-top:16px}
 @media(max-width:760px){.upsell-body{grid-template-columns:1fr}.upsell-action{justify-items:start;text-align:left}}
+/* Get started: numbered install steps; a finished step turns green. */
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:14px}.step{padding:18px 20px}.step-head{display:flex;gap:14px;align-items:flex-start}.step-head h2{margin:0}
+.step-no{flex:none;display:grid;place-items:center;width:30px;height:30px;font:600 14px var(--ff-head);color:var(--accent);box-shadow:inset 0 0 0 1px var(--glow-alpha-30)}
+.step.done .step-no{color:var(--bg-deep);background:#4BE38A;box-shadow:none;font-size:0}.step.done .step-no::after{content:'✓';font-size:15px}
+.step .form-body,.step .table-wrap,.tutorial{margin:14px 0 0 44px}.step .form-body{padding:0}
+.inline-form{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.inline-form input{flex:1 1 220px}
+.tutorial p{margin:0 0 10px;max-width:720px;line-height:1.6}.tutorial pre{margin:0 0 12px;color:var(--text);user-select:all}.tutorial code{font-size:12px}
+.tutorial details{margin:4px 0 0;color:var(--muted)}.tutorial summary{cursor:pointer;color:var(--accent)}
+#downloads-form{margin-top:22px}
+@media (max-width:640px){.step .form-body,.step .table-wrap,.tutorial{margin-left:0}}
+.inline-form button{width:auto;margin:0}
