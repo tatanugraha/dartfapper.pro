@@ -291,25 +291,29 @@ test('Kafra Guard Basic: protection switch, client limits and player modules nee
   assert.deepEqual(builds.pending.map(b=>b.build),['b'.repeat(64)]);assert.equal(builds.pending[0].attempts,3);
   assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'New patch'},owner),env)).status,200);
   assert.deepEqual(JSON.parse(calls.at(-1).body),{build:'b'.repeat(64),label:'New patch'});assert.equal(calls.length,before+2);
+  assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'Classic',realm:' Classic '},owner),env)).status,200);
+  assert.deepEqual(JSON.parse(calls.at(-1).body),{build:'b'.repeat(64),label:'Classic',realm:'classic'});
+  assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),realm:'two words'},owner),env)).status,400);
   for(const body of [{server:own,build:'xyz'},{server:own,build:'b'.repeat(64),label:'two\nlines'}])assert.equal((await adminApi(request('build',body,owner),env)).status,400);
   assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',gateKey:'',plan:'gold'},admin),env)).status,400);
 });
 test('Super Admin issues a signed rAthena license that verifies with the public key',async t=>{
   const {generateKeyPairSync,verify}=await import('node:crypto');const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
   const env={...await fixture(t),KAFRA_LICENSE_KEY:keys.privateKey.export({type:'pkcs8',format:'pem'})},{admin,own,owner}=await ownerSetup(env);
-  const response=await adminApi(request('admin/license',{id:own,server:'sovereign-ro',expiresAt:'2099-12-31',maxOnline:500},admin),env);assert.equal(response.status,201);
+  const response=await adminApi(request('admin/license',{id:own,server:'sovereign-ro',realms:['renewal','classic'],expiresAt:'2099-12-31',maxOnline:500},admin),env);assert.equal(response.status,201);
   const {license}=await response.json(),[tag,payload,sig]=license.split('.');assert.equal(tag,'KG1');
   const un=v=>Buffer.from(v.replace(/-/g,'+').replace(/_/g,'/'),'base64');
   assert.ok(verify('sha256',Buffer.from('KG1.'+payload),{key:keys.publicKey,dsaEncoding:'ieee-p1363'},un(sig)));
-  const data=JSON.parse(un(payload));assert.equal(data.server,'sovereign-ro');assert.equal(data.exp,'2099-12-31');assert.equal(data.max,500);
-  const list=await (await adminApi(request('admin/licenses',{id:own},admin),env)).json();assert.equal(list.licenses[0].license,license);
+  const data=JSON.parse(un(payload));assert.equal(data.server,'sovereign-ro');assert.deepEqual(data.realms,['renewal','classic']);assert.ok(un(payload).toString().endsWith(']}'));assert.equal(data.exp,'2099-12-31');assert.equal(data.max,500);
+  const list=await (await adminApi(request('admin/licenses',{id:own},admin),env)).json();assert.equal(list.licenses[0].license,license);assert.deepEqual(list.licenses[0].realms,['renewal','classic']);
+  for(const realms of [['Renewal'],['a','a'],'renewal',Array.from({length:17},(_,i)=>'r'+i)])assert.equal((await adminApi(request('admin/license',{id:own,server:'ok',expiresAt:'2099-12-31',realms},admin),env)).status,400,JSON.stringify(realms));
   for(const body of [{id:own,server:'Bad Name',expiresAt:'2099-12-31'},{id:own,server:'ok',expiresAt:'2001-01-01'},{id:own,server:'ok',expiresAt:'2099-12-31',maxOnline:-1}])
     assert.equal((await adminApi(request('admin/license',body,admin),env)).status,400);
   assert.equal((await adminApi(request('admin/license',{id:own,server:'ok',expiresAt:'2099-12-31'},owner),env)).status,403);
   assert.equal((await adminApi(request('admin/license',{id:own,server:'ok',expiresAt:'2099-12-31'},admin),{...env,KAFRA_LICENSE_KEY:undefined})).status,503);
 });
 test('A database created before plans gets the column once and keeps existing Kafra Guard servers on Pro',async t=>{
-  const {localD1}=await import('../tools/local-d1.mjs');const old=schema.replace(",\n  kafra_plan TEXT NOT NULL DEFAULT 'basic'",'');assert.notEqual(old,schema);
+  const {localD1}=await import('../tools/local-d1.mjs');const old=schema.replace(/,\r?\n  kafra_plan TEXT NOT NULL DEFAULT 'basic'/,'');assert.notEqual(old,schema);
   const DB=localD1(old);t.after(()=>DB.close());const env={...await fixture(t),DB};
   await DB.prepare("INSERT INTO kafra_servers (id,name,kafra,created_at) VALUES ('aaaaaaaaaaaaaaaa','Live RO',1,1),('bbbbbbbbbbbbbbbb','New RO',0,1)").run();
   const admin=await login(env),{servers}=await (await adminApi(request('admin/servers',undefined,admin),env)).json();

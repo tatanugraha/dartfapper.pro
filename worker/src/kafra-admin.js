@@ -174,11 +174,13 @@ async function ensurePlan(env){
   await env.DB.batch([env.DB.prepare(licensesSql),env.DB.prepare(coreSql)]);planReady.add(env.DB);
 }
 // rAthena login-server license, same format as tools/license-gen.mjs: KG1.<b64url(json)>.<b64url(P-256 signature, IEEE-P1363)>.
-async function signLicense(env,{server,exp,max}){
+// realms (optional, always last in the JSON) lists the sub-servers (e.g. renewal, classic) one license covers;
+// each login server names its own realm in kafraguard.conf and refuses to start protection if it is not listed.
+async function signLicense(env,{server,exp,max,realms=[]}){
   const pem=env.KAFRA_LICENSE_KEY;if(typeof pem!=='string'||!pem.includes('PRIVATE KEY'))throw new Error('license_key');
   const der=Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g,'').replace(/\s+/g,'')),c=>c.charCodeAt(0));
   const key=await crypto.subtle.importKey('pkcs8',der,{name:'ECDSA',namedCurve:'P-256'},false,['sign']);
-  const payload=b64u(encoder.encode(JSON.stringify({server,exp,max,iss:new Date().toISOString().slice(0,10)})));
+  const payload=b64u(encoder.encode(JSON.stringify({server,exp,max,iss:new Date().toISOString().slice(0,10),...(realms.length?{realms}:{})})));
   return 'KG1.'+payload+'.'+b64u(await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},key,encoder.encode('KG1.'+payload)));
 }
 // The env-configured gate (KAFRA_GATE_URL, e.g. Ragna Next) becomes a normal server row on first use, so it can be managed,
@@ -399,14 +401,18 @@ async function adminRoutes(request,env,path){
     const server=typeof data.server==='string'?data.server.trim().toLowerCase():'';if(!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(server))return json({error:'invalid_license_server'},400);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(data.expiresAt??'')||!Number.isFinite(Date.parse(data.expiresAt+'T23:59:59Z'))||Date.parse(data.expiresAt+'T23:59:59Z')<Date.now())return json({error:'invalid_expiry'},400);
     const max=data.maxOnline??0;if(!Number.isSafeInteger(max)||max<0||max>100000)return json({error:'invalid_max_online'},400);
-    let license;try{license=await signLicense(env,{server,exp:data.expiresAt,max});}catch{return json({error:'license_key_not_configured'},503);}
+    const realms=data.realms??[];
+    if(!Array.isArray(realms)||realms.length>16||realms.some(r=>typeof r!=='string'||!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(r))||new Set(realms).size!==realms.length)return json({error:'invalid_realms'},400);
+    let license;try{license=await signLicense(env,{server,exp:data.expiresAt,max,realms});}catch{return json({error:'license_key_not_configured'},503);}
     await env.DB.prepare('INSERT INTO kafra_licenses (server_id,license_server,expires,max_online,license,issued_by,issued_at) VALUES (?,?,?,?,?,?,?)').bind(row.id,server,data.expiresAt,max,license,superUser(env),Date.now()).run();
-    return json({license,server,expiresAt:data.expiresAt,maxOnline:max},201);
+    return json({license,server,realms,expiresAt:data.expiresAt,maxOnline:max},201);
   }
   if(path==='/api/admin/licenses'){
     if(!serverId.test(data.id??''))return json({error:'invalid_server'},400);
     const rows=(await env.DB.prepare('SELECT license_server,expires,max_online,license,issued_by,issued_at FROM kafra_licenses WHERE server_id=? ORDER BY id DESC LIMIT 20').bind(data.id).all()).results;
-    return json({licenses:rows.map(r=>({server:r.license_server,expiresAt:r.expires,maxOnline:r.max_online,license:r.license,issuedBy:r.issued_by,issuedAt:r.issued_at}))});
+    // Realms are read back from the signed payload, so older rows need no extra column.
+    const realmsOf=license=>{try{const r=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(license.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)))).realms;return Array.isArray(r)?r.map(String):[];}catch{return [];}};
+    return json({licenses:rows.map(r=>({server:r.license_server,realms:realmsOf(r.license),expiresAt:r.expires,maxOnline:r.max_online,license:r.license,issuedBy:r.issued_by,issuedAt:r.issued_at}))});
   }
   if(path==='/api/admin/servers/moro'){
     const row=await find();if(!row)return json({error:'invalid_server'},400);
@@ -559,7 +565,11 @@ export async function adminApi(request,env){
     // Client builds: a re-patched EXE or new GameShield.dll is refused until approved by its build hash.
     if(action==='build'||action==='unbuild'){if(!/^[a-f0-9]{64}$/.test(data.build??''))return json({error:'invalid_build'},400);payload={build:data.build};}
     if(action==='build'){const label=data.label==null||data.label===''?'':text(String(data.label).trim(),100);
-      if(label===null||/[\x00-\x1f\x7f]/.test(label))return json({error:'invalid_build_label'},400);payload.label=label;}
+      if(label===null||/[\x00-\x1f\x7f]/.test(label))return json({error:'invalid_build_label'},400);payload.label=label;
+      // Sub-server (realm) the build belongs to when one gate serves several login servers; sent only when set,
+      // so gates without realm support keep accepting realm-less approvals.
+      const realm=data.realm==null?'':String(data.realm).trim().toLowerCase();if(!/^(|[a-z0-9][a-z0-9_-]{0,31})$/.test(realm))return json({error:'invalid_realm'},400);
+      if(realm)payload.realm=realm;}
     if(action==='ban'){const reason=data.reason==null||data.reason===''?'':text(String(data.reason).trim(),200);
       if(reason===null||/[\x00-\x1f\x7f]/.test(reason))return json({error:'invalid_reason'},400);payload.reason=reason;}
     const id=write?data.server:url.searchParams.get('server');
@@ -579,6 +589,7 @@ export async function adminApi(request,env){
       if([401,404].includes(response.status)&&['builds','build'].includes(action))return json({error:'builds_unsupported'},400);
       if(response.status===404&&action==='versions')return json({error:'versions_unsupported'},400);
       // A gate older than the protection switch rejects the unknown field.
+      if(response.status===400&&action==='build'&&payload.realm)return json({error:'realms_unsupported'},400);
       if(response.status===400)return json({error:action==='policy'?(payload?.protection!==undefined?'protection_unsupported':'invalid_limits'):'invalid_request'},400);
       if(!response.ok)return unavailable('HTTP '+response.status);
       const result=JSON.parse((await response.text()).slice(0,action==='rules'?4194304:131072));
@@ -586,7 +597,7 @@ export async function adminApi(request,env){
       if(action==='bans')return json({bans:(Array.isArray(result.bans)?result.bans:[]).slice(0,500).map(b=>({deviceId:String(b.deviceId),reason:String(b.reason??''),bannedAt:b.bannedAt??null}))});
       if(action==='builds'){const hash=v=>/^[a-f0-9]{64}$/.test(v??'');
         return json({published:Array.isArray(result.published)?result.published.filter(hash):null,
-          approved:(Array.isArray(result.approved)?result.approved:[]).filter(b=>hash(b?.build)).slice(0,200).map(b=>({build:b.build,label:String(b.label??'').slice(0,100),approvedAt:b.approvedAt??null})),
+          approved:(Array.isArray(result.approved)?result.approved:[]).filter(b=>hash(b?.build)).slice(0,200).map(b=>({build:b.build,label:String(b.label??'').slice(0,100),realm:/^[a-z0-9_-]{1,32}$/.test(b.realm??'')?b.realm:'',approvedAt:b.approvedAt??null})),
           pending:(Array.isArray(result.pending)?result.pending:[]).filter(b=>hash(b?.build)).slice(0,50).map(b=>({build:b.build,firstSeen:b.firstSeen??null,lastSeen:b.lastSeen??null,attempts:Number(b.attempts)||0}))});}
       // GameShield.dll per player, labelled from the Super Admin's catalog; 'latest' is the version players should run.
       if(action==='versions'){const known=new Map((await coreVersions(env)).map(v=>[v.sha256,v])),latest=[...known.values()].find(v=>v.latest)??null;

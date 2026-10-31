@@ -163,6 +163,13 @@ Manage → **rAthena license** menandatangani lisensi untuk module login-server
 `npx wrangler secret put KAFRA_LICENSE_KEY --config worker/wrangler.kafra.jsonc`.
 Kunci privat tidak pernah dikirim ke browser; riwayat lisensi disimpan di `kafra_licenses`.
 
+**Satu lisensi untuk beberapa sub-server** (Renewal / Classic / Revo dalam satu gate): isi
+*Sub-servers covered* (mis. `renewal, classic, revo`), lalu di `kafraguard.conf` tiap login
+server isi `realm = renewal` / `classic` / `revo`. Saat **Approve** build di Client builds,
+isi sub-server-nya juga, supaya client itu hanya bisa login ke sub-server tersebut. Max
+players online berlaku per sub-server. Gate butuh `server/gate-upgrade-realms.sql`; detail
+dan daftar celah yang ditutup ada di `docs/MULTI-REALM.md` (repo kafra-shield).
+
 ## Data yang ditampilkan
 
 Sesi aktif, IP yang dilihat gate, unique ID perangkat bernamespace, build hash,
