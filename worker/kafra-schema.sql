@@ -23,8 +23,13 @@ CREATE TABLE IF NOT EXISTS kafra_servers (
   moro_plan TEXT,
   moro_expires INTEGER,
   moro_key_hash TEXT UNIQUE,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  kafra_plan TEXT NOT NULL DEFAULT 'basic'
 );
+-- kafra_plan: 'basic' (Kafra Guard) or 'pro' (Kafra Guard Pro: protection switch, client limits, player module reports).
+-- Older databases get the column from the Worker on first use; servers already running Kafra Guard start on Pro.
+-- rAthena login-server licenses issued by the Super Admin (signed with the KAFRA_LICENSE_KEY secret); history only.
+CREATE TABLE IF NOT EXISTS kafra_licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, server_id TEXT NOT NULL, license_server TEXT NOT NULL, expires TEXT NOT NULL, max_online INTEGER NOT NULL DEFAULT 0, license TEXT NOT NULL, issued_by TEXT NOT NULL, issued_at INTEGER NOT NULL);
 -- Server Owner accounts sit below the env-configured Super Admin; read-only access to one server.
 CREATE TABLE IF NOT EXISTS kafra_owners (
   username TEXT PRIMARY KEY,

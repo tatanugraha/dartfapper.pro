@@ -120,6 +120,38 @@ atau laporan modul, dan `/internal/authorize` gate mengizinkan semua login.
 Berlaku untuk game yang dibuka setelah diubah; client yang sedang berjalan
 tetap pada modenya sampai di-restart. Butuh gate + GameShield.dll versi baru.
 
+## Paket Kafra Guard vs Kafra Guard Pro
+
+Super Admin memilih paket per server di **Servers & owners → Manage → Plan**
+(kolom `kafra_servers.kafra_plan`: `basic` / `pro`).
+
+- **Kafra Guard (basic)**: client terverifikasi, kick/ban, module rules, Client builds.
+- **Kafra Guard Pro**: semua itu + switch Protection (mode tes), Client limits,
+  dan melihat laporan modul pemain (View modules).
+
+Server basic melihat kartu "Upgrade to Pro" di tempat fitur Pro. Worker juga
+menolak API-nya (`pro_required`), jadi tidak bisa diakali dari browser. Server
+yang turun dari Pro ke basic otomatis dikembalikan ke protection ON (best effort).
+Saat Worker baru pertama jalan, kolom `kafra_plan` ditambahkan otomatis dan
+server yang sudah memakai Kafra Guard diset **Pro**, supaya tidak ada fitur yang hilang.
+
+## Client builds (approve build baru)
+
+Gate hanya menerima build (hash EXE + DLL) yang dipublish lewat profile atau
+di-approve owner. Setelah client di-patch ulang / DLL diganti, jalankan game sekali.
+Build-nya muncul di panel **Client builds** sebagai "Waiting for approval", lalu
+klik **Approve**. Butuh gate versi baru + tabel `kafra_builds`
+(`server/gate-upgrade-builds.sql` di repo kafra-shield). Tanpa tabel itu approval
+tetap jalan, tapi hilang saat gate restart.
+
+## Lisensi rAthena dari dashboard
+
+Manage → **rAthena license** menandatangani lisensi untuk module login-server
+(format sama dengan `tools/license-gen.mjs`). Butuh secret Worker
+`KAFRA_LICENSE_KEY` berisi isi `E:\gameshield\.local\kafra-license\license-private.pem` (PKCS8 PEM):
+`npx wrangler secret put KAFRA_LICENSE_KEY --config worker/wrangler.kafra.jsonc`.
+Kunci privat tidak pernah dikirim ke browser; riwayat lisensi disimpan di `kafra_licenses`.
+
 ## Data yang ditampilkan
 
 Sesi aktif, IP yang dilihat gate, unique ID perangkat bernamespace, build hash,

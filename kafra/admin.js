@@ -2,7 +2,7 @@
 if(location.hostname==='dartfapper.pro'||location.hostname==='www.dartfapper.pro')location.replace('https://kafra-guard-owner.tatagpriyanugraha.workers.dev/');
 const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer;
 const roles={super_admin:'Super Admin',server_owner:'Server Owner',member:'Member'};
-const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',invalid_protection:'Protection must be on or off.',protection_unsupported:'This gate does not support the protection switch yet. Update the gate on the VPS and restart it.',invalid_reason:'Reason must be 200 characters or fewer, on one line.',invalid_device:'Invalid device ID.',not_banned:'That device is not banned.',ota_agent_offline:'The update server has not reported in the last 5 minutes.',ota_busy:'An update action is already waiting.',ota_nothing_to_promote:'Canary is not newer than production.',ota_no_rollback:'No signed rollback is ready for the live version.',invalid_action:'Unsupported action.',owner_not_found:'That owner account no longer exists.',invalid_hash:'Invalid SHA-256.',invalid_verdict:'Pick Allow or Block.',invalid_rule_text:'DLL name (128) and note (200) must be one line.',rule_not_found:'That rule no longer exists.',rule_limit:'Rule list is full (5000).',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
+const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',invalid_protection:'Protection must be on or off.',protection_unsupported:'This gate does not support the protection switch yet. Update the gate on the VPS and restart it.',invalid_reason:'Reason must be 200 characters or fewer, on one line.',invalid_device:'Invalid device ID.',not_banned:'That device is not banned.',ota_agent_offline:'The update server has not reported in the last 5 minutes.',ota_busy:'An update action is already waiting.',ota_nothing_to_promote:'Canary is not newer than production.',ota_no_rollback:'No signed rollback is ready for the live version.',invalid_action:'Unsupported action.',owner_not_found:'That owner account no longer exists.',invalid_hash:'Invalid SHA-256.',invalid_verdict:'Pick Allow or Block.',invalid_rule_text:'DLL name (128) and note (200) must be one line.',rule_not_found:'That rule no longer exists.',rule_limit:'Rule list is full (5000).',pro_required:'This is a Kafra Guard Pro feature.',invalid_build:'Invalid build ID.',invalid_build_label:'Label must be one line, 100 characters max.',build_limit:'Approved build list is full (200). Revoke old builds first.',build_not_approved:'That build is no longer approved.',builds_unsupported:'This gate does not support build approvals yet. Update the gate on the VPS and restart it.',invalid_kafra_plan:'Pick Kafra Guard or Kafra Guard Pro.',invalid_license_server:'License server ID: lowercase letters, digits, - or _, up to 63 characters.',invalid_max_online:'Max players online must be 0–100000.',license_key_not_configured:'KAFRA_LICENSE_KEY is not configured on the Worker.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.'};
 const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'That account is no longer available. Please try again.'};
 const providerNames={google:'Google',discord:'Discord'};
 // OAuth callbacks come back as /#sso_error=…, /#linked=… or /#signed_in; read once, then clear the hash.
@@ -73,7 +73,7 @@ function render(){
     if(session.flags?.length){row.className='flagged';const badge=document.createElement('span');badge.className='badge alert';
       badge.textContent='⚠ '+[...new Set(session.flags.map(f=>f.tool))].join(', ');badge.title=session.flags.map(f=>f.name).join(', ');count.append(badge);}
     cell(row,time(session.lastSeen));
-    const action=document.createElement('td'),button=document.createElement('button');button.className='quiet';button.textContent='View modules →';button.addEventListener('click',()=>modules(session));
+    const action=document.createElement('td'),button=document.createElement('button');button.className='quiet';button.textContent=planOf()==='pro'?'View modules →':'🔒 View modules';button.addEventListener('click',()=>modules(session));
     const kick=document.createElement('button');kick.className='quiet danger';kick.textContent='Kick';kick.title='End this session; the game closes on its next heartbeat';
     kick.addEventListener('click',()=>guardAction('Kick this client ('+session.ip+')? The game closes within about 30 seconds.',()=>post('kick',{server,id:session.id}),'Client kicked.'));
     const ban=document.createElement('button');ban.className='quiet danger';ban.textContent='Ban';ban.title='Block this PC (hardware ID) from starting the game';
@@ -103,8 +103,27 @@ async function load(){
   try{const data=await api('sessions?server='+encodeURIComponent(server)+'&offset='+state.offset);state={...state,...data};$('total').textContent=data.total;$('reported').textContent=data.sessions.filter(s=>s.moduleCount!==null).length;$('updated').textContent=time(data.updatedAt);$('message').textContent='';render();alertFlags(data.sessions);}
   catch(error){state={sessions:[],offset:state.offset,total:0};$('message').textContent=error.message;$('total').textContent='—';$('reported').textContent='—';$('updated').textContent='—';empty($('sessions'),'Data unavailable. The panel never shows sample data.',7);}
   finally{$('refresh').disabled=false;}
-  loadBans();loadRules();
+  loadBans();loadRules();loadBuilds();
 }
+// Client builds: published by the release profile, approved here, or refused at start and waiting for approval.
+async function loadBuilds(){
+  if(!server)return;const tbody=$('builds');
+  try{const data=await api('builds?server='+encodeURIComponent(server));$('builds-panel').hidden=false;tbody.replaceChildren();
+    $('builds-waiting').hidden=!data.pending.length;$('builds-waiting').textContent=data.pending.length+' waiting';
+    const row=(build,status,tone,label,when,button)=>{const tr=document.createElement('tr');const id=cell(tr,build.slice(0,16)+'…',true);id.title=build;
+      const s=cell(tr,'');const b=document.createElement('span');b.className='badge'+tone;b.textContent=status;s.replaceChildren(b);
+      cell(tr,label||'—');cell(tr,when);const td=document.createElement('td');td.className='row-actions';if(button)td.append(button);tr.append(td);tbody.append(tr);if(tone===' review')tr.className='waiting';};
+    const action=(text,cls,handler)=>{const b=document.createElement('button');b.type='button';b.className='quiet'+cls;b.textContent=text;b.addEventListener('click',handler);return b;};
+    for(const p of data.pending)row(p.build,'Waiting for approval',' review','',p.attempts+(p.attempts===1?' start':' starts')+' refused · last '+date(p.lastSeen),
+      action('Approve','',async()=>{const label=prompt('Approve this build so players can start it.\nBuild '+p.build.slice(0,16)+'…\n\nLabel (optional, e.g. "Patch 31 Oct"):','');if(label===null)return;
+        await buildAction(()=>post('build',{server,build:p.build,label}),'Build approved. Players can start it now.');}));
+    for(const a of data.approved)row(a.build,'Approved','',a.label,'Approved '+date(a.approvedAt),
+      action('Revoke',' danger',()=>{if(confirm('Revoke this build? Players using it can no longer start the game.'))buildAction(()=>post('unbuild',{server,build:a.build}),'Approval revoked.');}));
+    for(const b of data.published??[])row(b,'Published release','','Signed release profile','—',null);
+    if(!tbody.childElementCount)empty(tbody,data.published===null?'This gate runs in lab mode: every build is accepted.':'No builds yet.',5);}
+  catch(error){$('builds-panel').hidden=false;empty(tbody,error.message,5);}
+}
+async function buildAction(send,done){try{await send();$('builds-status').textContent=done;}catch(error){$('builds-status').textContent=error.message;}await loadBuilds();}
 async function guardAction(question,send,done){
   if(question&&!confirm(question))return;
   try{await send();$('message').textContent=done;}catch(error){$('message').textContent=error.message;}
@@ -147,6 +166,28 @@ async function loadBans(){
       action.append(unban);row.append(action);tbody.append(row);}}
   catch{$('bans-panel').hidden=true;}
 }
+// Kafra Guard plans. Basic servers see an upgrade card where a Pro feature would be; the Worker refuses the call too.
+const planOf=()=>servers.find(s=>s.id===server)?.kafraPlan==='pro'?'pro':'basic';
+const upsellCopy={
+  protection:{title:'Test mode',text:'Pause protection while you test a new patch, then switch it back on in one click. On your current plan every game start is always protected.'},
+  limits:{title:'Client limits',text:'Decide how many game windows each PC and each internet connection can run. Block multi-client, or open it up for internet cafés.'},
+  modules:{title:'Player module reports',text:'See every DLL loaded inside a player’s game, spot unknown tools, and allow or block them by hash.'}};
+function upsell(kind){
+  const card=document.createElement('div');card.className='upsell-body';const copy=upsellCopy[kind],admin=user?.role==='super_admin';
+  const tag=document.createElement('span');tag.className='pro-tag';tag.textContent='🔒 KAFRA GUARD PRO';
+  const title=document.createElement('h2');title.textContent=copy.title;const text=document.createElement('p');text.className='hint';text.textContent=copy.text;
+  const copyBox=document.createElement('div');copyBox.append(tag,title,text);
+  const action=document.createElement(admin?'button':'a');action.className='primary upsell-cta';
+  if(admin){action.type='button';action.innerHTML='Switch this server to Pro <span>→</span>';action.addEventListener('click',()=>{view('admin');});}
+  else{action.href='https://dartfapper.pro/contact/';action.target='_blank';action.rel='noopener';action.innerHTML='Upgrade to Pro <span>→</span>';}
+  const note=document.createElement('small');note.className='upsell-note';note.textContent=admin?'Servers & owners → Manage → Plan.':'Your server switches over instantly. No reinstall, no client update.';
+  const side=document.createElement('div');side.className='upsell-action';side.append(action,note);card.append(copyBox,side);return card;
+}
+function renderPlan(){
+  const pro=planOf()==='pro',badge=$('plan-badge');badge.hidden=!server;badge.textContent=pro?'PRO':'BASIC';badge.classList.toggle('pro',pro);
+  for(const panel of document.querySelectorAll('[data-upsell]')){panel.hidden=pro||!server;if(!pro&&!panel.childElementCount)panel.append(upsell(panel.dataset.upsell));}
+  if(!pro){$('protection-panel').hidden=true;$('limits-form').hidden=true;}
+}
 let protection=true;
 function showProtection(on){protection=on;$('protection-panel').hidden=false;
   $('protection-state').textContent=on?'On':'Off';$('protection-state').className='badge'+(on?'':' alert');
@@ -154,7 +195,7 @@ function showProtection(on){protection=on;$('protection-panel').hidden=false;
     'Test mode: the game starts after the splash without the gate, heartbeats or module reports, and the gate allows every login. Turn it back on when testing is done.';
   $('protection-toggle').checked=on;}
 async function loadLimits(){
-  if(!server)return;$('limits-status').textContent='';
+  if(!server)return;$('limits-status').textContent='';renderPlan();if(planOf()!=='pro')return;
   try{const policy=await api('policy?server='+encodeURIComponent(server));$('limit-device').value=policy.maxPerDevice;$('limit-network').value=policy.maxPerNetwork;$('limits-form').hidden=false;showProtection(policy.protection!==false);}
   catch(error){$('limits-form').hidden=true;$('protection-panel').hidden=true;}
 }
@@ -169,6 +210,9 @@ $('limits-form').addEventListener('submit',async event=>{event.preventDefault();
   catch(error){$('limits-status').textContent=error.message;}finally{button.disabled=false;}});
 let unknownReport=[],reportSession=null;
 async function modules(session){reportSession=session;
+  const pro=planOf()==='pro',panel=$('module-panel');panel.querySelector('.upsell-body')?.remove();
+  for(const part of panel.querySelectorAll('.table-wrap,.module-note'))part.hidden=!pro;$('allow-unknown').hidden=true;
+  if(!pro){panel.hidden=false;$('module-title').textContent='Client modules · '+session.ip;panel.querySelector('.panel-top').after(upsell('modules'));panel.scrollIntoView({behavior:'smooth',block:'nearest'});return;}
   $('module-panel').hidden=false;$('module-title').textContent='Client modules · '+session.ip;empty($('modules'),'Loading client report…',4);$('module-status').textContent='';
   try{const data=await api('modules?server='+encodeURIComponent(server)+'&id='+encodeURIComponent(session.id));
     $('module-status').textContent=data.receivedAt?'Received '+time(data.receivedAt)+(data.truncated?' · List capped at 128 modules.':''):'The client has not sent a module report yet.';
@@ -247,7 +291,7 @@ async function loadAdmin(){
     $('owner-server').replaceChildren(...data.servers.map(s=>new Option(s.name,s.id)));$('owner-form').querySelector('button').disabled=!data.servers.length;
     const tbody=$('server-list');if(!data.servers.length){empty(tbody,'No servers yet. Add the first one above.',4);}else tbody.replaceChildren();
     for(const s of data.servers){const row=document.createElement('tr');cell(row,s.name);
-      const products=document.createElement('td');products.className='owner-cell';products.append(badge('Kafra Guard',s.kafra),' ',badge('Mobile RO',s.moro));row.append(products);
+      const products=document.createElement('td');products.className='owner-cell';products.append(badge(s.kafra&&s.kafraPlan==='pro'?'Kafra Guard Pro':'Kafra Guard',s.kafra),' ',badge('Mobile RO',s.moro));row.append(products);
       const owners=document.createElement('td');owners.className='owner-cell';
       if(!s.owners.length){const none=document.createElement('span');none.className='muted';none.textContent='No owners yet';owners.append(none);}
       for(const o of s.owners){const chip=document.createElement('span');chip.className='chip';chip.textContent=o.username;const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title='Remove owner '+o.username;remove.setAttribute('aria-label','Remove owner '+o.username);
@@ -266,8 +310,9 @@ async function loadAdmin(){
   }catch(error){$('admin-message').textContent=error.message;}
 }
 function openManage(s,scroll=true){
+  if(managed?.id!==s.id){$('license-output').hidden=true;$('license-form').reset();$('license-server').value=s.name.toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,63);}
   managed=s;$('manage').hidden=false;$('manage-title').textContent=s.name;
-  $('kafra-enabled').checked=s.kafra;$('kafra-gate').value=s.gateUrl??'';$('kafra-key').value='';$('kafra-key-hint').textContent=s.gateUrl?'Leave empty to keep the stored key.':'Required the first time Kafra Guard is enabled.';
+  $('kafra-enabled').checked=s.kafra;$('kafra-plan').value=s.kafraPlan==='pro'?'pro':'basic';$('license-form').hidden=!s.kafra;if(s.kafra)loadLicenses();$('kafra-gate').value=s.gateUrl??'';$('kafra-key').value='';$('kafra-key-hint').textContent=s.gateUrl?'Leave empty to keep the stored key.':'Required the first time Kafra Guard is enabled.';
   $('moro-enabled').checked=s.moro;$('moro-plan-input').value=s.moroPlan??'';$('moro-expires-input').value=s.moroExpires?new Date(s.moroExpires).toISOString().slice(0,10):'';$('moro-rotate').checked=false;
   $('build-form').hidden=!s.moro;if(s.moro)loadManageBuilds();
   if(scroll)$('manage').scrollIntoView({behavior:'smooth',block:'start'});
@@ -285,7 +330,19 @@ function submitter(id,send,reset=true){$(id).addEventListener('submit',async eve
   try{await send();if(reset)$(id).reset();await loadAdmin();}catch(error){$('admin-message').textContent=error.message;}finally{button.disabled=false;}});}
 submitter('server-form',()=>post('admin/servers',{name:$('server-name').value}));
 submitter('owner-form',()=>{const password=$('owner-pass').value;$('owner-pass').value='';return post('admin/owners',{serverId:$('owner-server').value,username:$('owner-user').value.trim(),password});});
-submitter('kafra-form',()=>post('admin/servers/kafra',{id:managed.id,enabled:$('kafra-enabled').checked,gateUrl:$('kafra-gate').value,gateKey:$('kafra-key').value}),false);
+submitter('kafra-form',async()=>{const result=await post('admin/servers/kafra',{id:managed.id,enabled:$('kafra-enabled').checked,plan:$('kafra-plan').value,gateUrl:$('kafra-gate').value,gateKey:$('kafra-key').value});
+  if(result.protectionRestored===false)alert('Saved as Kafra Guard. The gate could not be reached to switch protection back on — check it on the Kafra Guard page.');},false);
+async function loadLicenses(){
+  const tbody=$('licenses');
+  try{const {licenses}=await post('admin/licenses',{id:managed.id});if(!licenses.length){empty(tbody,'No licenses issued yet.',5);return;}tbody.replaceChildren();
+    for(const l of licenses){const row=document.createElement('tr');cell(row,l.server,true);cell(row,l.expiresAt);cell(row,l.maxOnline?String(l.maxOnline):'No limit');cell(row,date(l.issuedAt));
+      const td=document.createElement('td'),copy=document.createElement('button');copy.type='button';copy.className='quiet';copy.textContent='Copy';
+      copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(l.license);copy.textContent='Copied ✓';}catch{prompt('Copy the license:',l.license);}});td.append(copy);row.append(td);tbody.append(row);}}
+  catch(error){empty(tbody,error.message,5);}
+}
+submitter('license-form',async()=>{const result=await post('admin/license',{id:managed.id,server:$('license-server').value.trim(),expiresAt:$('license-expires').value,maxOnline:Number($('license-max').value||0)});
+  $('license-output').hidden=false;$('license-value').textContent=result.license;$('copy-license').textContent='Copy license';},false);
+$('copy-license').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('license-value').textContent.trim());$('copy-license').textContent='Copied ✓';}catch{$('copy-license').textContent='Select the code and press Ctrl+C';}});
 $('copy-key').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('key-value').textContent.trim());$('copy-key').textContent='Copied ✓';}catch{$('copy-key').textContent='Select the code and press Ctrl+C';}});
 submitter('moro-form',async()=>{const result=await post('admin/servers/moro',{id:managed.id,enabled:$('moro-enabled').checked,plan:$('moro-plan-input').value,expiresAt:$('moro-expires-input').value,rotateKey:$('moro-rotate').checked});
   $('key-output').hidden=!result.ingestKey;$('key-value').textContent=result.ingestKey??'';if(result.ingestKey)$('key-output').scrollIntoView({behavior:'smooth',block:'nearest'});},false);
@@ -300,7 +357,7 @@ $('logout').addEventListener('click',async()=>{try{await post('logout',{});showL
 for(const item of document.querySelectorAll('[data-view]'))item.addEventListener('click',()=>view(item.dataset.view));
 $('server').addEventListener('change',()=>{server=$('server').value;state.offset=0;$('module-panel').hidden=true;load();loadLimits();});
 $('moro-server').addEventListener('change',()=>{moroServer=$('moro-server').value;loadMoro();});
-$('refresh').addEventListener('click',load);$('moro-refresh').addEventListener('click',loadMoro);$('search').addEventListener('input',render);$('close-modules').addEventListener('click',()=>{$('module-panel').hidden=true;});
+$('refresh').addEventListener('click',load);$('builds-refresh').addEventListener('click',loadBuilds);$('moro-refresh').addEventListener('click',loadMoro);$('search').addEventListener('input',render);$('close-modules').addEventListener('click',()=>{$('module-panel').hidden=true;});
 $('previous').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-50);load();});$('next').addEventListener('click',()=>{state.offset+=50;load();});
 api('me').then(me=>{showDashboard(me);
   if(returned.linked||returned.sso_error){view('settings');$('settings-message').textContent=returned.linked?providerNames[returned.linked]+' is now linked. You can use it to sign in.':ssoErrors[returned.sso_error]??'Linking failed. Please try again.';}
