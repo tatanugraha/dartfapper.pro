@@ -33,7 +33,7 @@ test('Authenticated owner sees explicit unconfigured gate, never sample player d
 const gateKey='c'.repeat(64),otherKey='d'.repeat(64);
 async function ownerSetup(env){const admin=await login(env);
   const make=async(name,gate,key)=>{const {id}=await (await adminApi(request('admin/servers',{name},admin),env)).json();
-    assert.equal((await adminApi(request('admin/servers/kafra',{id,enabled:true,gateUrl:gate,gateKey:key},admin),env)).status,200);return id;};
+    assert.equal((await adminApi(request('admin/servers/kafra',{id,enabled:true,gateUrl:gate,gateKey:key,plan:'pro'},admin),env)).status,200);return id;};
   const own=await make('Sovereign RO','https://gate.sovereign.test/',gateKey),other=await make('Other RO','https://gate.other.test/',otherKey);
   assert.equal((await adminApi(request('admin/owners',{username:'sov.owner',password:'owner-pass-1234',serverId:own},admin),env)).status,201);
   const response=await adminApi(request('login',{username:'sov.owner',password:'owner-pass-1234'}),env);assert.equal(response.status,200);
@@ -66,7 +66,7 @@ test('Products are opt-in: an owner sees nothing until Kafra Guard or Mobile RO 
   const {id}=await (await adminApi(request('admin/servers',{name:'Bare RO'},admin),env)).json();
   await adminApi(request('admin/owners',{username:'bare.owner',password:'owner-pass-1234',serverId:id},admin),env);
   const owner=(await adminApi(request('login',{username:'bare.owner',password:'owner-pass-1234'}),env)).headers.get('Set-Cookie').split(';')[0];
-  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers,[{id,name:'Bare RO',kafra:false,moro:false}]);
+  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers,[{id,name:'Bare RO',kafra:false,moro:false,kafraPlan:'basic',limits:{realms:1,allowRules:10,maxOnline:50,maxPerDevice:2,maxPerNetwork:2}}]);
   assert.equal((await adminApi(request('sessions',undefined,owner),env)).status,404);assert.equal((await adminApi(request('moro',undefined,owner),env)).status,404);
   assert.equal((await adminApi(request('admin/servers/kafra',{id,enabled:true,gateUrl:'https://gate.bare.test/',gateKey:''},admin),env)).status,400);
 });
@@ -275,4 +275,183 @@ test('OTA per server: agent reports channels, Super Admin requests promote, agen
   await agent({production:state.canary,canary:state.canary,rollback:{version:100,tag:'v1.0.18'}});
   view=(await (await adminApi(request('moro?server='+own,undefined,admin),env)).json()).ota;assert.equal(view.rollback.tag,'v1.0.18');
   assert.equal((await rollback()).status,200);assert.equal((await agent({production:state.canary})).action.action,'rollback');
+});
+test('Kafra Guard Basic: protection switch, client limits above 2 and player modules need Pro; build approvals work on every plan',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const calls=[];
+  globalThis.fetch=async(url,init)=>{calls.push({url:String(url),body:init.body});
+    if(String(url).endsWith('/internal/owner/builds'))return new Response(JSON.stringify({published:['a'.repeat(64)],approved:[],pending:[{build:'b'.repeat(64),firstSeen:'2026-10-31T00:00:00Z',lastSeen:'2026-10-31T00:00:00Z',attempts:3},{build:'not-a-hash'}]}));
+    return new Response(JSON.stringify({maxPerDevice:2,maxPerNetwork:0,networkPrefix:24,protection:true,approved:'x'}));};
+  const down=await (await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',gateKey:'',plan:'basic'},admin),env)).json();
+  // Moving down to Basic turns protection back on and brings "no network limit" down to Basic's 2 per network.
+  assert.equal(down.plan,'basic');assert.equal(down.protectionRestored,true);
+  assert.deepEqual(calls.slice(-3).map(c=>[c.url.split('/').pop(),c.body]),[['policy',undefined],['policy','{"protection":true,"maxPerDevice":2,"maxPerNetwork":2}'],['splash','{"clear":true}']]);
+  assert.equal((await (await adminApi(request('me',undefined,owner),env)).json()).servers[0].kafraPlan,'basic');
+  for(const [path,body] of [['policy',{server:own,protection:false}],['modules?server='+own+'&id='+'a'.repeat(32)]]){
+    const response=await adminApi(request(path,body,owner),env);assert.equal(response.status,403,path);assert.equal((await response.json()).error,'pro_required');}
+  // Basic reads and sets client limits up to 2 per PC and 2 per network; more, or no network limit, is Pro.
+  assert.equal((await adminApi(request('policy?server='+own,undefined,owner),env)).status,200);
+  for(const [maxPerDevice,maxPerNetwork] of [[3,1],[1,3],[2,0],[10,100]]){
+    const response=await adminApi(request('policy',{server:own,maxPerDevice,maxPerNetwork},owner),env);assert.equal(response.status,403);
+    assert.deepEqual(await response.json(),{error:'pro_required_limits',maxPerDevice:2,maxPerNetwork:2});}
+  assert.equal((await adminApi(request('policy',{server:own,maxPerDevice:2,maxPerNetwork:2},owner),env)).status,200);
+  assert.equal(calls.at(-1).body,'{"maxPerDevice":2,"maxPerNetwork":2}');
+  const before=calls.length;
+  const builds=await (await adminApi(request('builds?server='+own,undefined,owner),env)).json();
+  assert.deepEqual(builds.pending.map(b=>b.build),['b'.repeat(64)]);assert.equal(builds.pending[0].attempts,3);
+  assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'New patch'},owner),env)).status,200);
+  assert.deepEqual(JSON.parse(calls.at(-1).body),{build:'b'.repeat(64),label:'New patch'});assert.equal(calls.length,before+2);
+  // Tying a build to a sub-server is Pro (multi-server); on Pro the realm is normalised and sent.
+  assert.equal((await (await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'Classic',realm:'classic'},owner),env)).json()).error,'pro_required_realms');
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',gateKey:'',plan:'pro'},admin),env)).status,200);
+  assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),label:'Classic',realm:' Classic '},owner),env)).status,200);
+  assert.deepEqual(JSON.parse(calls.at(-1).body),{build:'b'.repeat(64),label:'Classic',realm:'classic'});
+  assert.equal((await adminApi(request('build',{server:own,build:'b'.repeat(64),realm:'two words'},owner),env)).status,400);
+  for(const body of [{server:own,build:'xyz'},{server:own,build:'b'.repeat(64),label:'two\nlines'}])assert.equal((await adminApi(request('build',body,owner),env)).status,400);
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',gateKey:'',plan:'gold'},admin),env)).status,400);
+});
+test('Super Admin issues a signed rAthena license that verifies with the public key',async t=>{
+  const {generateKeyPairSync,verify}=await import('node:crypto');const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+  const env={...await fixture(t),KAFRA_LICENSE_KEY:keys.privateKey.export({type:'pkcs8',format:'pem'})},{admin,own,owner}=await ownerSetup(env);
+  const response=await adminApi(request('admin/license',{id:own,server:'sovereign-ro',realms:['renewal','classic'],expiresAt:'2099-12-31',maxOnline:500},admin),env);assert.equal(response.status,201);
+  const {license}=await response.json(),[tag,payload,sig]=license.split('.');assert.equal(tag,'KG1');
+  const un=v=>Buffer.from(v.replace(/-/g,'+').replace(/_/g,'/'),'base64');
+  assert.ok(verify('sha256',Buffer.from('KG1.'+payload),{key:keys.publicKey,dsaEncoding:'ieee-p1363'},un(sig)));
+  const data=JSON.parse(un(payload));assert.equal(data.server,'sovereign-ro');assert.deepEqual(data.realms,['renewal','classic']);assert.ok(un(payload).toString().endsWith(']}'));assert.equal(data.exp,'2099-12-31');assert.equal(data.max,500);
+  const list=await (await adminApi(request('admin/licenses',{id:own},admin),env)).json();assert.equal(list.licenses[0].license,license);assert.deepEqual(list.licenses[0].realms,['renewal','classic']);
+  for(const realms of [['Renewal'],['a','a'],'renewal',Array.from({length:17},(_,i)=>'r'+i)])assert.equal((await adminApi(request('admin/license',{id:own,server:'ok',expiresAt:'2099-12-31',realms},admin),env)).status,400,JSON.stringify(realms));
+  for(const body of [{id:own,server:'Bad Name',expiresAt:'2099-12-31'},{id:own,server:'ok',expiresAt:'2001-01-01'},{id:own,server:'ok',expiresAt:'2099-12-31',maxOnline:-1}])
+    assert.equal((await adminApi(request('admin/license',body,admin),env)).status,400);
+  assert.equal((await adminApi(request('admin/license',{id:own,server:'ok',expiresAt:'2099-12-31'},owner),env)).status,403);
+  assert.equal((await adminApi(request('admin/license',{id:own,server:'ok',expiresAt:'2099-12-31'},admin),{...env,KAFRA_LICENSE_KEY:undefined})).status,503);
+});
+test('A database created before plans gets the column once and keeps existing Kafra Guard servers on Pro',async t=>{
+  const {localD1}=await import('../tools/local-d1.mjs');const old=schema.replace(/,\r?\n  kafra_plan TEXT NOT NULL DEFAULT 'basic'/,'');assert.notEqual(old,schema);
+  const DB=localD1(old);t.after(()=>DB.close());const env={...await fixture(t),DB};
+  await DB.prepare("INSERT INTO kafra_servers (id,name,kafra,created_at) VALUES ('aaaaaaaaaaaaaaaa','Live RO',1,1),('bbbbbbbbbbbbbbbb','New RO',0,1)").run();
+  const admin=await login(env),{servers}=await (await adminApi(request('admin/servers',undefined,admin),env)).json();
+  assert.deepEqual(servers.map(s=>[s.name,s.kafraPlan]),[['Live RO','pro'],['New RO','basic']]);
+});
+test('Super Admin labels GameShield.dll versions; every plan sees which version its players run',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
+  const old='1'.repeat(64),current='2'.repeat(64),stray='3'.repeat(64);
+  assert.equal((await adminApi(request('admin/core',{sha256:old,label:'1.0 (Oct)'},admin),env)).status,200);
+  let list=await (await adminApi(request('admin/core',{sha256:current,label:'1.1 hardened',notes:'Pentest fixes',latest:true},admin),env)).json();
+  assert.deepEqual(list.versions.map(v=>[v.label,v.latest]).sort(),[['1.0 (Oct)',false],['1.1 hardened',true]]);
+  for(const body of [{sha256:'x',label:'a'},{sha256:old,label:''},{sha256:old,label:'a\nb'},{sha256:old,label:'x'.repeat(41)}])
+    assert.equal((await adminApi(request('admin/core',body,admin),env)).status,400,JSON.stringify(body));
+  assert.equal((await adminApi(request('admin/core',{sha256:old,label:'x'},owner),env)).status,403);
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',plan:'basic'},admin),env)).status,200);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});let seen,status=200;
+  globalThis.fetch=async url=>{seen=String(url);if(seen.endsWith('/policy'))return new Response('{}');
+    return new Response(JSON.stringify({players:6,versions:[{sha256:current,players:3},{sha256:old,players:1},{sha256:stray,players:1},{sha256:null,players:1},{sha256:'bad'}]}),{status});};
+  const versions=await (await adminApi(request('versions?server='+own,undefined,owner),env)).json();
+  assert.equal(seen,'https://gate.sovereign.test/internal/owner/versions');
+  assert.deepEqual(versions,{players:6,latest:{sha256:current,label:'1.1 hardened'},versions:[
+    {sha256:current,label:'1.1 hardened',players:3,status:'latest'},{sha256:old,label:'1.0 (Oct)',players:1,status:'outdated'},
+    {sha256:stray,label:null,players:1,status:'unlisted'},{sha256:null,label:null,players:1,status:'unreported'}]});
+  status=404;assert.equal((await (await adminApi(request('versions?server='+own,undefined,owner),env)).json()).error,'versions_unsupported');
+  list=await (await adminApi(request('admin/core/delete',{sha256:old},admin),env)).json();assert.deepEqual(list.versions.map(v=>v.sha256),[current]);
+});
+test('Kafra Guard Basic limits: one login server, 50 players online, 10 allowed DLLs; Pro lifts them',async t=>{
+  const {generateKeyPairSync}=await import('node:crypto');const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+  const env={...await fixture(t),KAFRA_LICENSE_KEY:keys.privateKey.export({type:'pkcs8',format:'pem'})},{admin,own,owner}=await ownerSetup(env);
+  const plan=p=>adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',plan:p},admin),env);
+  const license=body=>adminApi(request('admin/license',{id:own,server:'sov',expiresAt:'2099-12-31',...body},admin),env);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});let rules=[];const sent=[];
+  globalThis.fetch=async(url,init)=>{if(String(url).endsWith('/rules'))return new Response(JSON.stringify({rules}));sent.push(String(url));return new Response('{}');};
+  assert.equal((await plan('basic')).status,200);
+  assert.deepEqual((await (await adminApi(request('me',undefined,owner),env)).json()).servers[0].limits,{realms:1,allowRules:10,maxOnline:50,maxPerDevice:2,maxPerNetwork:2});
+  assert.equal((await (await license({realms:['renewal','classic'],maxOnline:50})).json()).error,'pro_required_realms');
+  for(const maxOnline of [0,51])assert.equal((await (await license({maxOnline})).json()).error,'basic_max_online',String(maxOnline));
+  assert.equal((await license({maxOnline:50,realms:['renewal']})).status,201);
+  const hash=i=>i.toString(16).padStart(64,'0'),rule=(sha256,verdict='allow')=>adminApi(request('rule',{server:own,sha256,name:'a.dll',verdict},owner),env);
+  rules=Array.from({length:10},(_,i)=>({sha256:hash(i+1),verdict:'allow'}));
+  assert.equal((await (await rule(hash(99))).json()).error,'allow_rule_limit');
+  assert.equal((await rule(hash(3))).status,200,'editing an allowed DLL is not a new one');
+  assert.equal((await rule(hash(99),'block')).status,200,'block rules are not capped');
+  assert.equal((await plan('pro')).status,200);
+  assert.equal((await rule(hash(99))).status,200);
+  assert.equal((await license({realms:['renewal','classic'],maxOnline:0})).status,201);
+});
+test('Self-serve Kafra Guard: a member opens one free Basic server, connects its gate and issues 30-day licenses',async t=>{
+  const {generateKeyPairSync}=await import('node:crypto');const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+  const env={...await fixture(t),...sso,KAFRA_LICENSE_KEY:keys.privateKey.export({type:'pkcs8',format:'pem'})},{own,owner:adminOwner}=await ownerSetup(env);
+  const profile={current:{id:'discord-8',username:'freebie'}};fakeProviders(t,profile);
+  const member=(await oauth(env,'discord','login')).cookie;
+  assert.deepEqual(await (await adminApi(request('self',undefined,member),env)).json(),{role:'member',server:null});
+  for(const name of ['',' ','x'.repeat(61),'a\nb'])assert.equal((await adminApi(request('self/server',{name},member),env)).status,400);
+  const created=await adminApi(request('self/server',{name:'Free RO'},member),env);assert.equal(created.status,201);
+  const {id}=await created.json(),owner=created.headers.get('Set-Cookie').split(';')[0];
+  assert.equal((await adminApi(request('me',undefined,member),env)).status,401,'the member session ends');
+  const me=await (await adminApi(request('me',undefined,owner),env)).json();assert.equal(me.role,'server_owner');assert.deepEqual(me.servers.map(s=>[s.id,s.kafra,s.kafraPlan]),[[id,true,'basic']]);
+  assert.equal((await (await adminApi(request('self/server',{name:'Second'},owner),env)).json()).error,'already_has_server');
+  assert.equal((await (await adminApi(request('me',undefined,(await oauth(env,'discord','login')).cookie),env)).json()).role,'server_owner','SSO signs into the owner account');
+  assert.equal((await adminApi(request('identities/unlink',{provider:'discord'},owner),env)).status,400,'an SSO-only owner keeps its last login');
+  assert.equal((await adminApi(request('login',{username:me.username,password:'0'.repeat(20)}),env)).status,401,'no password login');
+  let state=await (await adminApi(request('self',undefined,owner),env)).json();assert.equal(state.ssoOnly,true);assert.equal(state.server.gateConnected,false);
+  // Gate: saved only after it accepts the key; the URL must be https and a bare origin.
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});let status=401,seen=[];
+  globalThis.fetch=async(url,init)=>{seen.push([String(url),init.headers.Authorization]);return new Response('{}',{status});};
+  const gate=body=>adminApi(request('self/gate',body,owner),env);
+  for(const body of [{gateUrl:'http://gate.free.test/',gateKey:gateKey},{gateUrl:'https://gate.free.test/x',gateKey:gateKey},{gateUrl:'https://gate.free.test/',gateKey:'short'}])assert.equal((await gate(body)).status,400);
+  assert.equal((await (await gate({gateUrl:'https://gate.free.test/',gateKey:gateKey})).json()).error,'gate_key_rejected');
+  status=200;assert.equal((await gate({gateUrl:'https://gate.free.test',gateKey:gateKey.toUpperCase()})).status,200);
+  assert.deepEqual(seen.at(-1),['https://gate.free.test/internal/owner/policy','Bearer '+gateKey]);
+  state=await (await adminApi(request('self',undefined,owner),env)).json();assert.equal(state.server.gateConnected,true);assert.equal(state.server.gateUrl,'https://gate.free.test/');
+  assert.ok(!JSON.stringify(state).includes(gateKey));
+  globalThis.fetch=async()=>new Response(JSON.stringify({total:0,offset:0,sessions:[]}));assert.equal((await adminApi(request('sessions',undefined,owner),env)).status,200);
+  // License: Basic limits, 30 days, issued by the owner; Pro owners and other servers are refused.
+  assert.equal((await adminApi(request('self/license',{server:'Bad Name'},owner),env)).status,400);
+  const issued=await adminApi(request('self/license',{server:'free-ro',maxOnline:0,realms:['a','b'],expiresAt:'2099-12-31'},owner),env);assert.equal(issued.status,201);
+  const lic=await issued.json();assert.equal(lic.maxOnline,50);assert.deepEqual(lic.realms,[]);
+  assert.equal(lic.expiresAt,new Date(Date.now()+30*86400000).toISOString().slice(0,10));
+  const payload=JSON.parse(Buffer.from(lic.license.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'),'base64'));assert.equal(payload.max,50);assert.equal(payload.realms,undefined);
+  state=await (await adminApi(request('self',undefined,owner),env)).json();assert.equal(state.licenses[0].license,lic.license);assert.equal(state.licenses[0].issuedBy,me.username);
+  for(let i=0;i<8;i++)assert.equal((await adminApi(request('self/license',{server:'free-ro'},owner),env)).status,201);
+  assert.equal((await adminApi(request('self/license',{server:'free-ro'},owner),env)).status,429,'10 license requests a day');
+  assert.equal((await (await adminApi(request('self/license',{server:'sov'},adminOwner),env)).json()).error,'license_by_admin','Pro licenses come from the Super Admin');
+  assert.equal((await adminApi(request('self/gate',{gateUrl:'https://gate.free.test/',gateKey:gateKey},adminOwner),env)).status,200,'any owner may repoint its own gate');
+  assert.equal((await env.DB.prepare('SELECT gate_url FROM kafra_servers WHERE id=?').bind(id).first()).gate_url,'https://gate.free.test/');
+  assert.equal((await adminApi(request('admin/servers',undefined,owner),env)).status,403);
+  assert.ok(own);
+});
+test('Super Admin lists owner tools for the install page; every signed-in user can read them',async t=>{const env={...await fixture(t),...sso},admin=await login(env);
+  const sha256='e'.repeat(64),add=body=>adminApi(request('admin/downloads',{kind:'config',version:'1.2.0',url:'https://cdn.example.test/KafraGuardConfig.zip',sha256,...body},admin),env);
+  for(const body of [{kind:'exe'},{url:'http://cdn.example.test/a.zip'},{url:'https://user:pw@cdn.example.test/a.zip'},{sha256:'abc'},{version:''},{notes:'x'.repeat(301)}])assert.equal((await add(body)).status,400,JSON.stringify(body));
+  const added=await add({notes:'Windows 10/11'});assert.equal(added.status,201);const [item]=(await added.json()).downloads;
+  assert.deepEqual([item.kind,item.version,item.sha256,item.notes],['config','1.2.0',sha256,'Windows 10/11']);
+  fakeProviders(t,{current:{id:'discord-9',username:'reader'}});const member=(await oauth(env,'discord','login')).cookie;
+  assert.equal((await (await adminApi(request('downloads',undefined,member),env)).json()).downloads[0].url,'https://cdn.example.test/KafraGuardConfig.zip');
+  assert.equal((await adminApi(request('admin/downloads',{kind:'config',version:'1',url:'https://a.test/',sha256},member),env)).status,403);
+  assert.equal((await adminApi(request('downloads'),env)).status,401);
+  assert.deepEqual((await (await adminApi(request('admin/downloads/delete',{id:item.id},admin),env)).json()).downloads,[]);
+});
+test('Pro splash art: checked and rebuilt on upload, Super Admin approves, signed for the gate host and pushed',async t=>{
+  const {generateKeyPairSync,verify,createHash}=await import('node:crypto'),{deflateSync}=await import('node:zlib');const keys=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+  const env={...await fixture(t),KAFRA_LICENSE_KEY:keys.privateKey.export({type:'pkcs8',format:'pem'})},{admin,own,owner}=await ownerSetup(env);
+  const crcT=Array.from({length:256},(_,n)=>{let c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;return c>>>0;});
+  const crc=b=>{let c=0xffffffff;for(const x of b)c=crcT[(c^x)&255]^(c>>>8);return (c^0xffffffff)>>>0;};
+  const chunk=(type,d)=>{const b=Buffer.alloc(12+d.length);b.writeUInt32BE(d.length);b.write(type,4);d.copy(b,8);b.writeUInt32BE(crc(b.subarray(4,8+d.length)),8+d.length);return b;};
+  const png=({w=640,tail=Buffer.alloc(0)}={})=>{const ih=Buffer.alloc(13);ih.writeUInt32BE(w);ih.writeUInt32BE(480,4);ih[8]=8;ih[9]=2;
+    return Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),chunk('IHDR',ih),chunk('tEXt',Buffer.from('a\0b')),chunk('IDAT',deflateSync(Buffer.alloc(480*(1+w*3)))),chunk('IEND',Buffer.alloc(0)),tail]).toString('base64');};
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const pushed=[];
+  globalThis.fetch=async(url,init)=>{pushed.push([String(url),init.body]);return new Response('{}');};
+  const upload=(image,cookie=owner)=>adminApi(request('splash',{server:own,image},cookie),env);
+  for(const [image,error] of [[png({w:641}),'image_size'],[png({tail:Buffer.from('MZ')}),'invalid_image'],['bm90IGEgcG5n','invalid_image']])assert.equal((await (await upload(image)).json()).error,error);
+  const sent=await upload(png());assert.equal(sent.status,201);const {splash}=await sent.json();
+  assert.equal(splash.status,'pending');assert.equal(splash.scan,'skipped');assert.ok(!Buffer.from(splash.image.split(',')[1],'base64').includes('tEXt'),'ancillary chunks are dropped');
+  assert.equal((await adminApi(request('admin/splash',undefined,owner),env)).status,403);
+  const queue=await (await adminApi(request('admin/splash',undefined,admin),env)).json();assert.equal(queue.splash[0].server,own);assert.equal(queue.splash[0].status,'pending');
+  const approved=await (await adminApi(request('admin/splash/review',{server:own,approve:true},admin),env)).json();assert.deepEqual(approved,{ok:true,status:'approved',published:true});
+  const [url,body]=pushed.at(-1),art=JSON.parse(body);assert.equal(url,'https://gate.sovereign.test/internal/owner/splash');
+  const image=Buffer.from(art.image,'base64');assert.equal(createHash('sha256').update(image).digest('hex'),splash.sha256);
+  assert.ok(verify('sha256',Buffer.from('KGS1\ngate.sovereign.test\n'+splash.sha256),{key:keys.publicKey,dsaEncoding:'ieee-p1363'},Buffer.from(art.signature,'base64')));
+  const view=await (await adminApi(request('splash?server='+own,undefined,owner),env)).json();assert.equal(view.splash.status,'approved');assert.ok(view.splash.publishedAt);
+  assert.equal((await adminApi(request('admin/splash/review',{server:own,approve:false,note:'Logo shows a third-party brand'},admin),env)).status,200);
+  assert.equal((await (await adminApi(request('splash?server='+own,undefined,owner),env)).json()).splash.note,'Logo shows a third-party brand');
+  assert.equal((await (await adminApi(request('splash/publish',{server:own},owner),env)).json()).error,'splash_not_approved');
+  // Basic: no upload; moving to Basic clears the gate.
+  assert.equal((await adminApi(request('admin/servers/kafra',{id:own,enabled:true,gateUrl:'https://gate.sovereign.test/',plan:'basic'},admin),env)).status,200);
+  assert.equal(pushed.at(-1)[1],'{"clear":true}');assert.equal((await (await upload(png())).json()).error,'pro_required');
+  assert.equal((await (await adminApi(request('splash/delete',{server:own},owner),env)).json()).ok,true);
+  assert.equal((await (await adminApi(request('splash?server='+own,undefined,owner),env)).json()).splash,null);
 });

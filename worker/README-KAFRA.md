@@ -120,6 +120,123 @@ atau laporan modul, dan `/internal/authorize` gate mengizinkan semua login.
 Berlaku untuk game yang dibuka setelah diubah; client yang sedang berjalan
 tetap pada modenya sampai di-restart. Butuh gate + GameShield.dll versi baru.
 
+## Paket Kafra Guard vs Kafra Guard Pro
+
+Super Admin memilih paket per server di **Servers & owners → Manage → Plan**
+(kolom `kafra_servers.kafra_plan`: `basic` / `pro`).
+
+- **Kafra Guard (basic)**: client terverifikasi, kick/ban, module rules, Client builds.
+- **Kafra Guard Pro**: semua itu + switch Protection (mode tes), Client limits,
+  dan melihat laporan modul pemain (View modules).
+
+Server basic melihat kartu "Upgrade to Pro" di tempat fitur Pro. Worker juga
+menolak API-nya (`pro_required`), jadi tidak bisa diakali dari browser. Server
+yang turun dari Pro ke basic otomatis dikembalikan ke protection ON (best effort).
+Saat Worker baru pertama jalan, kolom `kafra_plan` ditambahkan otomatis dan
+server yang sudah memakai Kafra Guard diset **Pro**, supaya tidak ada fitur yang hilang.
+
+Batas per paket (satu tabel `planLimits` di `worker/src/kafra-admin.js`):
+
+| | Kafra Guard (basic) | Kafra Guard Pro |
+|---|---|---|
+| Sub-server per lisensi (realm) | 1 | sampai 16 |
+| Max players online di lisensi | 1–50 | bebas (0 = tanpa batas) |
+| DLL di whitelist (Allow) | 10 | tanpa batas (block tidak dibatasi) |
+| Build per sub-server (realm) | tidak | ya |
+
+Batas ini ditegakkan oleh Worker. Owner yang memegang owner key gate sendiri
+(gate self-hosted) masih bisa menambah rule langsung ke gate; batas players online
+ditegakkan oleh module login lewat lisensi yang ditandatangani.
+
+## Client builds (approve build baru)
+
+Gate hanya menerima build (hash EXE + DLL) yang dipublish lewat profile atau
+di-approve owner. Setelah client di-patch ulang / DLL diganti, jalankan game sekali.
+Build-nya muncul di panel **Client builds** sebagai "Waiting for approval", lalu
+klik **Approve**. Butuh gate versi baru + tabel `kafra_builds`
+(`server/gate-upgrade-builds.sql` di repo kafra-shield). Tanpa tabel itu approval
+tetap jalan, tapi hilang saat gate restart.
+
+## Versi Kafra Guard core (GameShield.dll)
+
+Super Admin → **Kafra Guard core versions**: pilih `GameShield.dll` yang dibagikan ke
+player (file hanya di-hash di browser, tidak di-upload), beri nama versi, centang
+**latest**. Daftar ini disimpan di `kafra_core_versions` (dibuat otomatis oleh Worker).
+Di halaman Kafra Guard tiap server, panel **Kafra Guard core** menampilkan berapa
+player online yang memakai versi terbaru, versi lama, atau DLL yang tidak ada di daftar.
+Data per player berasal dari laporan modul client (muncul ±1 menit setelah login).
+Butuh gate dengan endpoint `/internal/owner/versions`; gate lama menampilkan pesan
+"Update the gate on the VPS".
+
+## Splash art (Pro)
+
+Server Pro bisa memakai gambar splash sendiri di layar start game, dengan badge kecil
+"Powered by Kafra Guard". Splash juga punya progress bar hijau dan tertutup begitu cek gate
+dan download gambar selesai (bukan lagi tetap 5 detik).
+
+- **Owner** (halaman Kafra Guard → **Splash art**): upload PNG tepat **640 × 480**, maks 900 KB.
+  Worker memeriksa setiap chunk dan CRC, lalu membangun ulang PNG (hanya IHDR + IDAT + IEND), jadi
+  teks/EXIF/data yang ditempel di belakang file dibuang. Status jadi *pending*; pemain tetap
+  memakai gambar lama sampai di-approve. Tombol **Send to gate again** mengirim ulang ke gate,
+  **Remove art** menghapusnya (pemain kembali ke gambar bawaan). Server Basic melihat kartu upgrade.
+- **Super Admin** (Servers & owners → **Splash art review**): lihat preview, **Approve** atau
+  **Reject** + catatan. Approve hanya untuk branding server itu sendiri, tidak ofensif/menyesatkan.
+  Approve menandatangani gambar (ECDSA P-256 dengan `KAFRA_LICENSE_KEY`, terikat ke host gate
+  server itu) dan mengirimnya ke gate. Tidak ada auto-approve.
+- **Cek malware (opsional)**: bila secret `VIRUSTOTAL_API_KEY` di-set, hash SHA-256 upload asli
+  dicek di VirusTotal; malicious/suspicious > 0 ditolak (`image_flagged`). Hanya hash yang dikirim,
+  file tidak pernah di-upload ke VirusTotal.
+  `npx wrangler secret put VIRUSTOTAL_API_KEY --config worker/wrangler.kafra.jsonc`
+- Server yang turun ke Basic otomatis dihapus splash-nya dari gate (best effort).
+
+Butuh: tabel D1 `kafra_splash` (ada di `worker/kafra-schema.sql`, jalankan ulang langkah 2 deploy),
+gate dengan `server/gate-upgrade-splash.sql` + `server/*.mjs` baru (repo kafra-shield), dan
+`GameShield.dll` baru. DLL baru = build hash baru, jadi owner perlu publish ulang lewat
+KafraGuardConfig atau approve di Client builds. Detail: `docs/PHASE3-SPLASH.md` (repo kafra-shield).
+
+## Lisensi rAthena dari dashboard
+
+Manage → **rAthena license** menandatangani lisensi untuk module login-server
+(format sama dengan `tools/license-gen.mjs`). Butuh secret Worker
+`KAFRA_LICENSE_KEY` berisi isi `E:\gameshield\.local\kafra-license\license-private.pem` (PKCS8 PEM):
+`npx wrangler secret put KAFRA_LICENSE_KEY --config worker/wrangler.kafra.jsonc`.
+Kunci privat tidak pernah dikirim ke browser; riwayat lisensi disimpan di `kafra_licenses`.
+
+**Satu lisensi untuk beberapa sub-server** (Renewal / Classic / Revo dalam satu gate): isi
+*Sub-servers covered* (mis. `renewal, classic, revo`), lalu di `kafraguard.conf` tiap login
+server isi `realm = renewal` / `classic` / `revo`. Saat **Approve** build di Client builds,
+isi sub-server-nya juga, supaya client itu hanya bisa login ke sub-server tersebut. Max
+players online berlaku per sub-server. Gate butuh `server/gate-upgrade-realms.sql`; detail
+dan daftar celah yang ditutup ada di `docs/MULTI-REALM.md` (repo kafra-shield).
+
+## Kafra Guard gratis (self-serve) dan halaman Get started
+
+Siapa pun yang daftar lewat Google/Discord (member) bisa memasang Kafra Guard (Basic) sendiri
+dari menu **Get started**, tanpa Super Admin:
+
+1. **Create my free server**: membuat 1 server `kafra=1`, plan `basic`. Member berubah jadi
+   Server Owner dengan username yang sama (login Google/Discord tetap terhubung). Akun ini
+   **tanpa password** (`dummyHash`), jadi login terakhirnya tidak bisa di-unlink. Batas: 3 server
+   per IP per hari, 200 per hari global.
+2. **Download owner tools**: daftar dari tabel `kafra_downloads` (link HTTPS + SHA-256), diisi
+   Super Admin di halaman yang sama (*Owner tools*); file di-hash di browser, tidak di-upload.
+3. Tutorial install gate (KafraGuardConfig *Install to VPS* atau `sudo bash installer/install.sh`).
+   Installer baru menulis `ownerKey` dan `internalPort` (8444) ke `gate.json`.
+4. **Connect gate** (`POST /api/self/gate`): URL + `ownerKey`. Worker mengetes
+   `GET /internal/owner/policy` dengan key itu dulu (`gate_key_rejected` bila ditolak), baru
+   menyimpannya terenkripsi. Gate bawaan (`KAFRA_GATE_URL`) tidak bisa diubah owner. 30×/hari.
+5. Tutorial module rAthena (`kafraguard-install.sh`, `kafraguard.conf`).
+6. **Generate license** (`POST /api/self/license`): selalu Basic, 30 hari, max 50 online, tanpa
+   sub-server; `issued_by` = username owner. 10×/hari. Server Pro dapat `license_by_admin`.
+7. Tutorial patch client + approve build.
+
+`GET /api/self` memberi status checklist (server, gate tersambung, riwayat lisensi);
+`GET /api/downloads` terbuka untuk semua user yang login.
+
+**Beban gate di atas 50 pemain**: gate menyimpan sesi di memori dan menerima heartbeat tiap 30
+detik per client, jadi 50 vs 500 pemain hampir tidak terasa di VPS. Batas 50 untuk Basic adalah
+batas paket, bukan batas teknis.
+
 ## Data yang ditampilkan
 
 Sesi aktif, IP yang dilihat gate, unique ID perangkat bernamespace, build hash,

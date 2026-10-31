@@ -53,8 +53,8 @@ window.GAMES = [
       id: "Gameguard buat server Ragnarok Online. Cek tiap client, blokir cheat tool lewat hash file, batasi multi-client, dan tampilkan siapa yang main di dashboard live."
     },
     emblem: "assets/images/emblem-kafra.svg",
-    url: "contact/?service=kafra",
-    cta: { en: "Get Kafra Guard", id: "Pakai Kafra Guard" }
+    url: "kafra-guard/",
+    cta: { en: "Explore Kafra Guard", id: "Lihat Kafra Guard" }
   },
   {
     id: "mythrix",
