@@ -391,6 +391,46 @@ async function adminRoutes(request,env,path){
     return json({servers:servers.map(s=>({...product(s),gateUrl:s.gate_url,builtIn:!!s.gate_url&&s.gate_url===envGate(env),moroPlan:s.moro_plan,moroExpires:s.moro_expires,moroKey:!!s.moro_key_hash,createdAt:s.created_at,
       owners:owners.filter(o=>o.server_id===s.id).map(o=>({username:o.username,createdAt:o.created_at}))}))});
   }
+  if(path==='/api/admin/monitor'&&request.method==='GET'){
+    const id=new URL(request.url).searchParams.get('server');
+    if(!serverId.test(id??''))return json({error:'invalid_server'},400);
+    const row=await serverRow({role:'super_admin'},id,env);if(!row)return json({error:'invalid_server'},404);
+    const server={id:row.id,name:row.name,kafra:!!row.kafra,plan:row.kafra_plan==='pro'?'pro':'basic',gateUrl:row.gate_url??null};
+    if(!row.kafra)return json({server,gate:{status:'disabled'},game:{status:'disabled',activeClients:0,clients:[]},logs:{available:false,recentCount:0,latest:null}});
+    let target;try{target=await gateFor({role:'super_admin'},id,env);}catch{return json({error:'data_key_not_configured'},503);}
+    const gate=target?.url&&target.key?gateUrl(target.url,env):null;
+    if(!gate)return json({server,gate:{status:'unconfigured'},game:{status:'unavailable',activeClients:0,clients:[]},logs:{available:false,recentCount:0,latest:null}});
+    const read=async(path,authenticated=false,limit=131072)=>{
+      try{
+        const response=await fetch(new URL(path,gate),{headers:authenticated?{Authorization:'Bearer '+target.key}:{},redirect:'manual',signal:AbortSignal.timeout(4000)});
+        if(!response.ok)return {ok:false,status:response.status};
+        const declared=Number(response.headers.get('content-length')??0);if(declared>limit){await response.body?.cancel();return {ok:false,status:response.status};}
+        const reader=response.body?.getReader();if(!reader)return {ok:false,status:response.status};
+        const chunks=[];let size=0;
+        for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel();return {ok:false,status:response.status};}chunks.push(value);}
+        const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+        return {ok:true,status:response.status,body:new TextDecoder().decode(bytes)};
+      }catch{return {ok:false,status:0};}
+    };
+    const [health,sessions,logs]=await Promise.all([
+      read('/healthz',false,64),read('/internal/owner/sessions?offset=0',true),read('/internal/owner/logs?offset=0',true)
+    ]);
+    let sessionData=null,logData=null;
+    try{if(sessions.ok)sessionData=JSON.parse(sessions.body);}catch{}
+    try{if(logs.ok)logData=JSON.parse(logs.body);}catch{}
+    const sessionRows=Array.isArray(sessionData?.sessions)?sessionData.sessions.slice(0,50):[];
+    const clients=sessionRows.map(s=>({
+      account:typeof s?.account?.userid==='string'?s.account.userid.replace(/[\x00-\x1f\x7f]/g,'').slice(0,64):null,
+      character:typeof s?.account?.character?.name==='string'?s.account.character.name.replace(/[\x00-\x1f\x7f]/g,'').slice(0,64):null,
+      buildHash:/^[a-f0-9]{64}$/.test(s?.buildHash??'')?s.buildHash.slice(0,12):null,
+      connectedAt:typeof s?.connectedAt==='string'?s.connectedAt:null
+    }));
+    const logRows=Array.isArray(logData?.logs)?logData.logs.slice(0,100).filter(x=>x&&/^[a-z_]{1,40}$/.test(x.code??'')&&typeof x.occurredAt==='string'):[];
+    const latest=logRows.reduce((current,item)=>!current||Date.parse(item.occurredAt)>Date.parse(current.occurredAt)?item:current,null);
+    return json({server,gate:{status:health.ok&&health.body.trim()==='ready'?'online':'offline',checkedAt:Date.now()},
+      game:{status:sessionData?'connected':'unavailable',activeClients:Number.isSafeInteger(sessionData?.total)&&sessionData.total>=0?sessionData.total:clients.length,clients},
+      logs:{available:logData?.available===true,recentCount:logRows.length,latest:latest?{code:latest.code,occurredAt:latest.occurredAt}:null}});
+  }
   if(path==='/api/admin/core'&&request.method==='GET')return json({versions:await coreVersions(env)});
   if(path==='/api/admin/splash'&&request.method==='GET'){
     const rows=(await env.DB.prepare("SELECT s.*,k.name FROM kafra_splash s JOIN kafra_servers k ON k.id=s.server_id ORDER BY s.status='pending' DESC,s.uploaded_at DESC LIMIT 50").all()).results;
@@ -797,6 +837,7 @@ export async function adminApi(request,env){
   try{target=await gateFor(user,url.searchParams.get('server')??(user.role==='server_owner'?user.serverId:'default'),env);}
   catch{return json({error:'data_key_not_configured'},503);}
   if(!target)return json({error:'server_not_found'},404);
+  if(path==='/api/modules'&&target.plan!=='pro')return json({error:'pro_required'},403);
   if(!target.url||!target.key)return json({error:'gate_not_configured'},503);
   const gate=gateUrl(target.url,env);if(!gate)return json({error:'gate_not_configured'},503);
   const upstream=new URL('/internal/owner/'+path.slice(5),gate);

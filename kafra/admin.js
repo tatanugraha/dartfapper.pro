@@ -1,6 +1,6 @@
 // Keep the admin panel and HttpOnly cookie on the Worker origin, not GitHub Pages.
 if(location.hostname==='dartfapper.pro'||location.hostname==='www.dartfapper.pro')location.replace('https://kafra-guard-owner.tatagpriyanugraha.workers.dev/');
-const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer;
+const $=id=>document.getElementById(id);let state={sessions:[],offset:0,total:0},user=null,servers=[],server=null,moroServer=null,managed=null,timer,devServers=[];
 const roles={super_admin:'Super Admin',server_owner:'Server Owner',member:'Member'};
 const errors={invalid_credentials:'Wrong username or password.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',admin_not_configured:'The Super Admin account is not configured on the server.',gate_not_configured:'The gate is not configured yet. No client data is shown.',gate_unavailable:'The gate cannot be reached. Check the service connection.',logs_unsupported:'Client logging is not installed on this gate yet. Update the gate and run gate-upgrade-client-logs.sql.',service_unavailable:'The admin service is not ready. Check the server configuration.',session_closed:'This client session has closed.',server_not_found:'Server not found, or this product is not enabled for it.',forbidden:'Only the Super Admin can do this.',data_key_not_configured:'KAFRA_DATA_KEY is not configured on the Worker.',invalid_name:'Server name is required (60 characters max).',invalid_gate_url:'Gate URL must be an HTTPS root, e.g. https://gate.server.com/.',invalid_gate_key:'Gate owner key must be 64 hex characters.',invalid_username:'Username must be 3–32 lowercase letters, digits, dots, underscores or dashes, and differ from the Super Admin.',weak_password:'Password must be at least 12 characters.',invalid_server:'Pick a valid server.',username_taken:'That username is taken.',invalid_plan:'Plan must be 40 characters or fewer.',invalid_expiry:'Pick a valid expiry date.',invalid_version:'Version is required (32 characters max).',invalid_build_url:'Download URL must be HTTPS.',invalid_notes:'Notes must be 1000 characters or fewer.',invalid_limits:'Clients per PC must be 1–10 and clients per network 0–100.',invalid_protection:'Protection must be on or off.',protection_unsupported:'This gate does not support the protection switch yet. Update the gate on the VPS and restart it.',invalid_reason:'Reason must be 200 characters or fewer, on one line.',invalid_device:'Invalid device ID.',not_banned:'That device is not banned.',ota_agent_offline:'The update server has not reported in the last 5 minutes.',ota_busy:'An update action is already waiting.',ota_nothing_to_promote:'Canary is not newer than production.',ota_no_rollback:'No signed rollback is ready for the live version.',invalid_action:'Unsupported action.',owner_not_found:'That owner account no longer exists.',invalid_hash:'Invalid SHA-256.',invalid_verdict:'Pick Allow or Block.',invalid_rule_text:'DLL name (128) and note (200) must be one line.',rule_not_found:'That rule no longer exists.',rule_limit:'Rule list is full (5000).',pro_required:'This is a Kafra Guard Pro feature.',pro_required_limits:'Kafra Guard allows up to 2 clients per PC and 2 per network. Upgrade to Kafra Guard Pro for more, or for no network limit.',invalid_build:'Invalid build ID.',invalid_build_label:'Label must be one line, 100 characters max.',build_limit:'Approved build list is full (200). Revoke old builds first.',build_not_approved:'That build is no longer approved.',builds_unsupported:'This gate does not support build approvals yet. Update the gate on the VPS and restart it.',invalid_kafra_plan:'Pick Kafra Guard or Kafra Guard Pro.',invalid_license_server:'License server ID: lowercase letters, digits, - or _, up to 63 characters.',invalid_max_online:'Max players online must be 0–100000.',pro_required_realms:'One license for several sub-servers is a Kafra Guard Pro feature. Kafra Guard covers one login server.',basic_max_online:'Kafra Guard allows up to 50 players online per license. Switch this server to Pro for more, or for no limit.',allow_rule_limit:'Kafra Guard allows up to 10 allowed DLLs. Remove one, or upgrade to Kafra Guard Pro for unlimited allowed DLLs.',already_has_server:'You already own a server.',gate_key_rejected:'The gate refused that owner key. Copy ownerKey from /etc/gameshield/gate.json and check the gate was restarted after adding it.',license_by_admin:'Kafra Guard Pro licenses are issued by dartfapper. Contact us for a new one.',invalid_download_kind:'Pick a tool.',invalid_download_url:'Download URL must be HTTPS.',download_limit:'The download list is full (50). Delete old versions first.',image_size:'The picture must be exactly 640 × 480 pixels.',image_too_large:'The picture must be 900 KB or smaller.',invalid_image:'That file is not a plain PNG picture (8-bit colour, no interlacing, nothing appended).',image_flagged:'This file was flagged by a malware scanner and cannot be used.',splash_not_found:'That server has no splash art.',splash_not_approved:'Only approved art can be sent to the gate.',invalid_realm:'Sub-server: lowercase letters, digits, - or _, up to 32 characters.',realms_unsupported:'This gate cannot tie builds to a sub-server yet. Update the gate on the VPS, run gate-upgrade-realms.sql and restart it.',invalid_realms:'Sub-servers: up to 16 names of lowercase letters, digits, - or _ (32 characters each), separated by commas, no duplicates.',license_key_not_configured:'KAFRA_LICENSE_KEY is not configured on the Worker.',last_sign_in:'This is your only way to sign in, so it cannot be unlinked.',invalid_core_label:'Version name (40 characters) and notes (200) must be one line.',core_limit:'The version list is full (100). Delete old versions first.',versions_unsupported:'This gate cannot report core versions yet. Update the gate on the VPS and restart it.'};
 const ssoErrors={unavailable:'That sign-in option is not set up yet.',too_many_attempts:'Too many attempts. Try again in 15 minutes.',signin_first:'Sign in with your password first, then link it from Settings.',expired:'The sign-in attempt expired. Please try again.',cancelled:'Sign-in was cancelled.',provider:'Google or Discord could not confirm your account. Please try again.',already_linked:'That Google or Discord account is already linked to another user.',not_linked:'That account is no longer available. Please try again.'};
@@ -414,6 +414,7 @@ function badge(text,on){const b=document.createElement('span');b.className='badg
 async function loadAdmin(){
   loadCoreCatalog();loadSplashReview();
   try{const data=await api('admin/servers');$('admin-message').textContent='';
+    renderDevMonitor(data.servers);
     $('owner-server').replaceChildren(...data.servers.map(s=>new Option(s.name,s.id)));$('owner-form').querySelector('button').disabled=!data.servers.length;
     const tbody=$('server-list');if(!data.servers.length){empty(tbody,'No servers yet. Add the first one above.',4);}else tbody.replaceChildren();
     for(const s of data.servers){const row=document.createElement('tr');cell(row,s.name);
@@ -434,6 +435,41 @@ async function loadAdmin(){
     if(managed&&!data.servers.some(s=>s.id===managed.id)){managed=null;$('manage').hidden=true;}
     applyAccess(await api('me'));
   }catch(error){$('admin-message').textContent=error.message;}
+}
+function renderDevMonitor(list){
+  devServers=list.filter(s=>s.kafra);const tbody=$('dev-monitor-list');tbody.replaceChildren();
+  if(!devServers.length){empty(tbody,'No servers have Kafra Guard enabled.',6);$('dev-monitor-status').textContent='';return;}
+  for(const s of devServers){const row=document.createElement('tr');row.dataset.serverId=s.id;
+    const serverCell=cell(row,s.name);const owners=document.createElement('small');owners.className='dev-owner-list';owners.textContent=s.owners.length?'Owner: '+s.owners.map(o=>o.username).join(', '):'No owner account';serverCell.append(owners);
+    if(s.gateUrl)link(row,s.gateUrl,'Open gate ↗');else cell(row,'Not configured');
+    const gate=cell(row,'Not checked');gate.dataset.monitorGate='';
+    const clients=cell(row,'—');clients.dataset.monitorClients='';
+    const logs=cell(row,'—');logs.dataset.monitorLogs='';
+    const action=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='quiet';button.textContent='Test';button.addEventListener('click',()=>checkDevServer(s,button));action.append(button);row.append(action);tbody.append(row);
+  }
+}
+async function checkDevServer(s,button){
+  const row=button.closest('tr');button.disabled=true;button.textContent='Testing…';
+  const gate=row.querySelector('[data-monitor-gate]'),clients=row.querySelector('[data-monitor-clients]'),logs=row.querySelector('[data-monitor-logs]');
+  gate.textContent='Checking…';clients.textContent='—';logs.textContent='—';
+  try{
+    const data=await api('admin/monitor?server='+encodeURIComponent(s.id));
+    gate.replaceChildren(badge(({online:'Online',offline:'Offline',unconfigured:'Not configured',disabled:'Guard disabled'})[data.gate.status]??'Unknown',data.gate.status==='online'));
+    clients.replaceChildren();
+    const count=document.createElement('strong');count.textContent=String(data.game.activeClients);clients.append(count,' active');
+    if(data.game.clients.length){const names=document.createElement('small');names.className='dev-client-list';names.textContent=data.game.clients.map(c=>[c.account,c.character].filter(Boolean).join(' · ')||'Unknown client').join(', ');clients.append(names);}
+    if(!data.logs.available)logs.textContent='Logging not available';
+    else if(data.logs.latest){logs.textContent=data.logs.latest.code+' · '+date(data.logs.latest.occurredAt);}
+    else logs.textContent='No errors reported';
+    $('dev-monitor-status').textContent=s.name+' checked '+time(data.gate.checkedAt)+'.';
+  }catch(error){gate.replaceChildren(badge('Check failed',false));clients.textContent='Unavailable';logs.textContent=error.message;$('dev-monitor-status').textContent='Could not check '+s.name+'.';}
+  finally{button.disabled=false;button.textContent='Test';}
+}
+async function testAllGates(){
+  const button=$('dev-test-all');button.disabled=true;$('dev-monitor-status').textContent='Checking '+devServers.length+' gates…';
+  try{for(let i=0;i<devServers.length;i+=4)await Promise.all(devServers.slice(i,i+4).map(s=>checkDevServer(s,$('dev-monitor-list').querySelector('[data-server-id="'+s.id+'"] button'))));
+    $('dev-monitor-status').textContent='Checked '+devServers.length+' Kafra Guard gates.';
+  }finally{button.disabled=false;}
 }
 function openManage(s,scroll=true){
   if(managed?.id!==s.id){$('license-output').hidden=true;$('license-form').reset();$('license-server').value=s.name.toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,63);}
@@ -507,6 +543,7 @@ for(const item of document.querySelectorAll('[data-view]'))item.addEventListener
 $('server').addEventListener('change',()=>{server=$('server').value;state.offset=0;$('module-panel').hidden=true;load();loadLimits();loadClientLogs();});
 $('moro-server').addEventListener('change',()=>{moroServer=$('moro-server').value;loadMoro();});
 $('refresh').addEventListener('click',load);$('logs-refresh').addEventListener('click',loadClientLogs);$('builds-refresh').addEventListener('click',loadBuilds);$('moro-refresh').addEventListener('click',loadMoro);$('search').addEventListener('input',render);$('close-modules').addEventListener('click',()=>{$('module-panel').hidden=true;});
+$('dev-test-all').addEventListener('click',testAllGates);
 $('previous').addEventListener('click',()=>{state.offset=Math.max(0,state.offset-50);load();});$('next').addEventListener('click',()=>{state.offset+=50;load();});
 api('me').then(me=>{showDashboard(me);
   if(returned.linked||returned.sso_error){view('settings');$('settings-message').textContent=returned.linked?providerNames[returned.linked]+' is now linked. You can use it to sign in.':ssoErrors[returned.sso_error]??'Linking failed. Please try again.';}

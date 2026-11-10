@@ -188,6 +188,23 @@ test('The env gate (KAFRA_GATE_URL) is listed as a real server and uses KAFRA_GA
     assert.equal(seen.url,'https://gate.ragna.test:8443/internal/owner/sessions?offset=0');assert.equal(seen.auth,'Bearer '+gateKey);}
   assert.equal((await adminApi(request('admin/servers/kafra',{id:servers[0].id,enabled:true,gateUrl:'https://gate.ragna.test:8443/'},admin),env)).status,200);
 });
+test('Developer Monitor tests one server gate and returns only safe client and log summaries',async t=>{const env=await fixture(t),{admin,own,owner}=await ownerSetup(env);
+  const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});const seen=[];
+  globalThis.fetch=async(url,init)=>{url=String(url);seen.push({url,auth:init.headers.Authorization??null});
+    if(url.endsWith('/healthz'))return new Response('ready');
+    if(url.endsWith('/internal/owner/sessions?offset=0'))return new Response(JSON.stringify({total:2,sessions:[
+      {account:{userid:'alice'},buildHash:'a'.repeat(64),connectedAt:'2026-11-11T00:00:00.000Z',ip:'192.0.2.1',deviceId:'e'.repeat(64)},
+      {account:null,buildHash:'b'.repeat(64),connectedAt:'2026-11-11T00:01:00.000Z',ip:'192.0.2.2',deviceId:'f'.repeat(64)}]}));
+    return new Response(JSON.stringify({available:true,logs:[{code:'bootstrap_denied',occurredAt:'2026-11-11T00:02:00.000Z',message:'must not leak'}]}));};
+  const response=await adminApi(request('admin/monitor?server='+own,undefined,admin),env),data=await response.json();
+  assert.equal(response.status,200);assert.equal(data.server.id,own);assert.equal(data.gate.status,'online');assert.equal(data.game.activeClients,2);
+  assert.deepEqual(data.game.clients.map(x=>[x.account,x.buildHash]),[['alice','a'.repeat(12)],[null,'b'.repeat(12)]]);
+  assert.deepEqual(data.logs,{available:true,recentCount:1,latest:{code:'bootstrap_denied',occurredAt:'2026-11-11T00:02:00.000Z'}});
+  assert.deepEqual(seen.map(x=>x.url),['https://gate.sovereign.test/healthz','https://gate.sovereign.test/internal/owner/sessions?offset=0','https://gate.sovereign.test/internal/owner/logs?offset=0']);
+  assert.ok(seen.slice(1).every(x=>x.auth==='Bearer '+gateKey));assert.equal(JSON.stringify(data).includes('192.0.2.'),false);assert.equal(JSON.stringify(data).includes('must not leak'),false);
+  assert.equal((await adminApi(request('admin/monitor?server='+own,undefined,owner),env)).status,403);
+  assert.equal((await adminApi(request('admin/monitor?server=invalid',undefined,admin),env)).status,400);
+});
 test('Linking a Google login that only opened a member account moves it to the signed-in account',async t=>{const env={...await fixture(t),...sso};
   const profile={current:{sub:'google-555',email:'me@gmail.test',email_verified:true}};fakeProviders(t,profile);
   const first=await oauth(env,'google','login'),member=(await (await adminApi(request('me',undefined,first.cookie),env)).json()).username;
