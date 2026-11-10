@@ -791,12 +791,12 @@ export async function adminApi(request,env){
       return json({ok:true,endedSessions:result.endedSessions??(action==='kick'?1:0)});
     }catch(error){return unavailable(error);}
   }
-  if(request.method!=='GET'||!['/api/sessions','/api/modules'].includes(path))return json({error:'not_found'},404);
+  if(request.method!=='GET'||!['/api/sessions','/api/modules','/api/logs'].includes(path))return json({error:'not_found'},404);
+  if(path==='/api/logs'&&user.role==='member')return json({error:'forbidden'},403);
   let target;
   try{target=await gateFor(user,url.searchParams.get('server')??(user.role==='server_owner'?user.serverId:'default'),env);}
   catch{return json({error:'data_key_not_configured'},503);}
   if(!target)return json({error:'server_not_found'},404);
-  if(path==='/api/modules'&&target.plan!=='pro')return json({error:'pro_required'},403);
   if(!target.url||!target.key)return json({error:'gate_not_configured'},503);
   const gate=gateUrl(target.url,env);if(!gate)return json({error:'gate_not_configured'},503);
   const upstream=new URL('/internal/owner/'+path.slice(5),gate);
@@ -808,10 +808,20 @@ export async function adminApi(request,env){
   try{
     const response=await fetch(upstream,{headers:{Authorization:'Bearer '+target.key},redirect:'manual',signal:AbortSignal.timeout(4000)});
     if(response.status===404&&path==='/api/modules')return json({error:'session_closed'},404);
+    if([404,503].includes(response.status)&&path==='/api/logs')return json({error:'logs_unsupported'},503);
     if(!response.ok)return unavailable('HTTP '+response.status);
     const reader=response.body.getReader();let size=0;const chunks=[];
     for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>131072){await reader.cancel();throw new Error('response_size');}chunks.push(value);}
     const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
-    return json(JSON.parse(new TextDecoder().decode(bytes)));
+    const result=JSON.parse(new TextDecoder().decode(bytes));
+    if(path==='/api/logs'){
+      const logs=Array.isArray(result.logs)?result.logs.slice(0,100).filter(x=>x&&/^[a-f0-9]{32}$/.test(x.id??'')&&
+        /^[a-f0-9]{32}$/.test(x.sessionId??'')&&/^[a-f0-9]{64}$/.test(x.deviceId??'')&&/^[a-f0-9]{64}$/.test(x.buildHash??'')&&
+        typeof x.code==='string'&&/^[a-z_]{1,40}$/.test(x.code)).map(x=>({id:x.id,sessionId:x.sessionId,deviceId:x.deviceId,
+          buildHash:x.buildHash,occurredAt:x.occurredAt,code:x.code,exceptionCode:/^[a-f0-9]{8}$/.test(x.exceptionCode??'')?x.exceptionCode:'',
+          module:/^[A-Za-z0-9_.-]{1,64}$/.test(x.module??'')?x.module:'',rva:Number.isSafeInteger(x.rva)&&x.rva>=0&&x.rva<=0xffffffff?x.rva:0})):[];
+      return json({logs,offset:Number(result.offset)||0,limit:100,updatedAt:result.updatedAt??Date.now(),available:result.available!==false});
+    }
+    return json(result);
   }catch(error){return unavailable(error);}
 }
